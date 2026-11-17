@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "2.2.1",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.1/SoundRelay-Android-v2.2.1.apk",
-    "sha256": "6c97abf9817f468b57b8ab0a5940b1e404234ff3fde00da71a3c7503d017b74b",
-    "notes": "v2.2.1（两端同版本）：本版手机端功能与 v2.2.0 一致，仅版本号与电脑端对齐（两端同版本成套发布）；修复集中在电脑端——驱动组件安装的 Secure Boot 检测与「软件打不开」加固，详见电脑端说明。 / EN: No functional changes on Android in v2.2.1 — version aligned with the Windows release (both ends ship version-locked); the fixes are on the Windows side (driver-install Secure Boot detection and app won't-start hardening)."
+    "version": "2.2.2",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.2/SoundRelay-Android-v2.2.2.apk",
+    "sha256": "4c6ac2acebff1e5b4648bc6168dc714ffc97be93b0ad5a7f5de66f9b39f09235",
+    "notes": "v2.2.2（两端同版本）：本版手机端功能与 v2.2.1 一致，仅版本号与电脑端对齐（两端同版本成套发布）；修复集中在电脑端——软件打不开（启动崩溃），详见电脑端说明。 / EN: No functional changes on Android in v2.2.2 — version aligned with the Windows release (both ends ship version-locked); the fix is on the Windows side (startup crash)."
   },
   "windows": {
-    "version": "2.2.1",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.1/SoundRelay-Setup-v2.2.1.exe",
-    "sha256": "807224255fafbdd0e498891576f4ca0c41b5418b2ee24b67f07e30768b302212",
-    "notes": "v2.2.1（两端同版本）：【修复】驱动组件安装失败只报退出码——Secure Boot 检测改在提权步骤内读取注册表状态，开启时直接给出关闭 Secure Boot 的 BIOS 操作步骤，不再盲目失败；安装日志记录每条命令的完整输出，便于定位。【修复】软件打不开——新增单实例保护（已在托盘运行时会弹窗说明）、启动全程日志（%LOCALAPPDATA%\\AirBridge\\logs\\startup.log）、音频设备枚举与引擎启动异常兜底，启动失败会弹窗并给出日志路径。 / EN: Fixed driver component install failing with a bare exit code: Secure Boot is now detected inside the elevated step via the registry, with concrete BIOS steps shown when it is on, and full command output written to the install log. Fixed app won't-start cases: single-instance guard with a clear notice, full startup logging, and hardened audio-device enumeration / engine start — fatal startup errors now show a dialog with the log path."
+    "version": "2.2.2",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.2/SoundRelay-Setup-v2.2.2.exe",
+    "sha256": "f1a02352f7a74e5f2f4b7bf4d57550426f585c57bebc57f9653816529596ec40",
+    "notes": "v2.2.2（两端同版本）：【修复】软件打不开——启动时界面资源加载顺序导致崩溃，已将界面设计令牌抽为共享资源字典并修复加载顺序；驱动组件与 v2.2.1 相同，未变更。 / EN: Fixes a startup crash that prevented the app from opening."
   }
 }
