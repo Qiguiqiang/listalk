@@ -1,1 +1,14 @@
-{"android":{"notes":"声音接力 SoundRelay v2.1.0（两端同版本）：回声链全线接通（平台 AEC + 自研 NLMS 实时抵消 + 双讲保护 + 啸叫保护）；默认扬声器输出 + 真实音频设备选择（耳机插拔实时刷新，耳机连手机即可把电脑声音接力到耳机）；麦克风模式（语音通话/高清拾音/自动）+ 主麦优选 + 高通去桌面传导噪声；自身声音回放三重防护；完整设置屏（重连三档/回归询问/后台/电池白名单）；附近发现为主配对入口（局域网+mDNS+BLE 三路合并）；配对码单播扇出。","sha256":"38b4edfef14c608f51a70987cfe1056f68d139b8e1679b119685798e21e8161f","url":"https://github.com/Qiguiqiang/soundrelay/releases/download/v2.1.0/PhoneAudioBridge-v2.1-debug.apk","version":"2.1.0"},"windows":{"notes":"声音接力 SoundRelay v2.1.0（两端同版本）：主窗口改为标准桌面横向布局（左侧状态栏 + 主内容区，可缩放）；采集源环路防护（同线缆两端/麦克风设备环回会被警告并阻止发送，另有相关度检测兜底拦截回传）；声音接力自有品牌虚拟音频设备识别（命中优先，未装自动回退 VB-CABLE）；安装包预留「虚拟音频设备驱动（测试签名）」组件位（本包未含驱动二进制，组件置灰并注明，驱动需在 Windows 构建机产出后并入，见仓库 driver/ 目录）。","sha256":"2dcd3cdca44e66528d56188f5f4d4a56f031c375a702928fbac080f4c9fccf99","url":"https://github.com/Qiguiqiang/soundrelay/releases/download/v2.1.0/AirBridge-Setup-v2.1.exe","version":"2.1.0"}}
+{
+  "android": {
+    "version": "2.2.0",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.0/SoundRelay-Android-v2.2.apk",
+    "sha256": "16d36079df58dac69d9928962ddecdd5b4c78935ace9bf5602a7e394ef6cad06",
+    "notes": "v2.2.0（两端同版本）：【修复】电脑声音到不了手机扬声器——播放路由钉死、AudioTrack 写入、LoopGuard 误拦三处缺陷已修，新增「收到音频包」计数便于定位；Mesh WiFi 漫游切换后自动重新对准、恢复推流；界面国际化：跟随系统语言显示中文/英文；更新清单迁至 GitHub 正式地址。 / EN: Fixed PC audio not reaching the phone speaker (routing pin, AudioTrack write, LoopGuard false-blocking) with a new received-packet counter; Mesh Wi-Fi roaming now re-targets automatically; UI follows system language (Chinese/English); update manifest moved to GitHub."
+  },
+  "windows": {
+    "version": "2.2.0",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.0/SoundRelay-Setup-v2.2.exe",
+    "sha256": "3162f7d5b964823e31b58aa52fd7fa7c0e744798a0893f28cb6d6ef3973ad1f6",
+    "notes": "v2.2.0（两端同版本）：全新桌面界面（横向布局按定稿原型落地）；安装包集成「声音接力虚拟音频设备驱动（测试签名）」组件——自有虚拟声卡随包安装（默认勾选，可取消；需关 Secure Boot、开测试模式、重启一次自动续装），App 优先识别自有设备、VB-CABLE 仅兜底；界面国际化：跟随系统语言显示中文/英文；Mesh 漫游恢复；更新清单迁至 GitHub 正式地址。 / EN: New desktop UI per approved prototype; installer now bundles the SoundRelay virtual audio driver (test-signed, selected by default, optional; requires Secure Boot off, test mode on, one reboot to finish), the app prefers the own virtual device with VB-CABLE as fallback; UI follows system language; Mesh roaming recovery; update manifest moved to GitHub."
+  }
+}
