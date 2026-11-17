@@ -14,6 +14,7 @@ KOTLINC="$HOME/tools/kotlinc/bin/kotlinc"
     app/src/main/java/com/qi/phoneaudiobridge/EchoCanceller.kt \
     app/src/main/java/com/qi/phoneaudiobridge/EchoProcessor.kt \
     app/src/main/java/com/qi/phoneaudiobridge/LoopGuard.kt \
+    app/src/main/java/com/qi/phoneaudiobridge/PlayoutWatchdog.kt \
     app/src/main/java/com/qi/phoneaudiobridge/SessionRecovery.kt \
     tools/TestMain.kt
 "$JAVA_HOME/bin/java" -cp "tools/jvm-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestMainKt

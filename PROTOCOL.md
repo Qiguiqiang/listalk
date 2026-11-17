@@ -1,4 +1,10 @@
-# 声桥 AirBridge — Wire Protocol v1 (multi-PC + pairing)
+# 声音接力 SoundRelay — Wire Protocol v1 (multi-PC + pairing)
+
+> Product renamed 声桥 AirBridge → 声音接力 SoundRelay (v2.2). Wire-level
+> identifiers deliberately RETAIN the legacy strings for compatibility with
+> installed v2.1 endpoints: the `app` field value `"AirBridge"`, the BLE seed
+> `"AirBridge-BLE-Service-v2"`, the mDNS type `_airbridge._udp`, and the
+> canonical update URL. Do not "fix" them to the new brand.
 
 Single UDP channel, port **47731**, used for presence beacons, discovery,
 control handshake, keepalive and audio. The identical protocol runs over
@@ -99,7 +105,7 @@ Sample-rate codes: `0 = 48000`, `1 = 24000`, `2 = 16000`.
 BLE is specified here as the *next* sensing layer, deliberately **not**
 implemented in v1: PC-side BLE advertising is not portable across
 Windows/Linux stacks, and phone-side background BLE wake is heavily
-restricted. The designed flow: PC advertises an AirBridge service UUID with
+restricted. The designed flow: PC advertises the product BLE service UUID with
 its deviceId + token-hash prefix; the phone, on BLE sighting of a paired
 deviceId, wakes the LAN presence listener and fast-tracks HELLO once the PC
 is also heard on WiFi/USB. v1's sensing stack is LAN beacon + pairing
@@ -110,7 +116,7 @@ same-room scenarios BLE would, at zero extra hardware cost.
 
 - Canonical manifest address (default, editable in the app's Settings and
   persisted; the user may later move it to their own server):
-  `https://muse.ai/s/airbridge-update/update.json`
+  `https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json`
 - Manifest shape:
   `{"android": {"version": "2.1.0", "url": "<apk url>", "sha256": "<hex sha256 of the apk>", "notes": "更新说明"}}`
   (a matching `windows` object is used by the PC apps; the Android app

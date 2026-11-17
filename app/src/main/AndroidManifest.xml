@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.qi.phoneaudiobridge">
+    package="com.qi.phoneaudiobridge"
+    android:versionName="2.2.0"
+    android:versionCode="220">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -27,7 +29,7 @@
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="声桥 AirBridge"
+        android:label="声音接力 SoundRelay"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity

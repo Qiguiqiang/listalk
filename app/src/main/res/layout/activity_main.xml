@@ -33,7 +33,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:text="声桥 AirBridge"
+                android:text="声音接力 SoundRelay"
                 android:textColor="#F2F5F9"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -49,7 +49,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:text="未连接"
+                android:text="@string/status_not_connected"
                 android:textColor="#9AA7B8"
                 android:textSize="13sp" />
             <TextView
@@ -58,7 +58,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:padding="6dp"
-                android:text="⚙ 设置"
+                android:text="@string/action_settings"
                 android:textColor="#9AA7B8"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -67,7 +67,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="把手机变成电脑的麦克风和扬声器"
+            android:text="@string/app_tagline"
             android:textColor="#9AA7B8"
             android:textSize="13sp" />
 
@@ -106,7 +106,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="撤销"
+                android:text="@string/action_undo"
                 android:textColor="#F2F5F9"
                 android:textSize="13sp"
                 android:textStyle="bold" />
@@ -136,7 +136,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="连接"
+                android:text="@string/action_connect"
                 android:textColor="#2CE8A5"
                 android:textSize="13sp"
                 android:textStyle="bold" />
@@ -146,7 +146,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="忽略"
+                android:text="@string/action_ignore"
                 android:textColor="#F2F5F9"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -175,7 +175,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="切换到耳机"
+                android:text="@string/action_switch_to_headset"
                 android:textColor="#2CE8A5"
                 android:textSize="13sp"
                 android:textStyle="bold" />
@@ -185,7 +185,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="不用"
+                android:text="@string/action_dismiss"
                 android:textColor="#F2F5F9"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -211,7 +211,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="AIRBRIDGE"
+                    android:text="SOUNDRELAY"
                     android:textColor="#5F6D80"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -233,7 +233,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="还没开始"
+                android:text="@string/hero_not_started"
                 android:textColor="#F2F5F9"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -243,7 +243,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="先在电脑上打开声桥 PC 端，再点下方「开始搜索」"
+                android:text="@string/hero_hint_first_run"
                 android:textColor="#9AA7B8"
                 android:textSize="13sp" />
 
@@ -265,7 +265,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="麦克风 → 电脑"
+                        android:text="@string/label_mic_to_pc"
                         android:textColor="#F2F5F9"
                         android:textSize="13sp" />
 
@@ -305,7 +305,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="电脑 → 扬声器"
+                        android:text="@string/label_pc_to_speaker"
                         android:textColor="#F2F5F9"
                         android:textSize="13sp" />
 
@@ -374,7 +374,7 @@
                 android:layout_marginTop="12dp"
                 android:background="@drawable/bg_statsbar"
                 android:fontFamily="monospace"
-                android:text="丢包 --% · 抖动 -- ms · 缓冲 -- ms"
+                android:text="@string/stats_placeholder"
                 android:textColor="#9AA7B8"
                 android:textSize="12sp"
                 android:visibility="gone" />
@@ -391,7 +391,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="电脑设备"
+                android:text="@string/section_pc_devices"
                 android:textColor="#F2F5F9"
                 android:textSize="16sp"
                 android:textStyle="bold" />
@@ -399,7 +399,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="配对过的电脑一出现就会自动连接；新电脑点卡片配对一次即可"
+                android:text="@string/section_pc_devices_hint"
                 android:textColor="#5F6D80"
                 android:textSize="12sp" />
 
@@ -434,7 +434,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:background="@drawable/btn_primary"
-                android:text="配对新电脑"
+                android:text="@string/action_pair_new_pc"
                 android:textColor="#052417"
                 android:textSize="16sp"
                 android:textStyle="bold" />
@@ -443,7 +443,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="点一下，附近的电脑会自动出现在列表里，选一台即可配对——不用输任何东西"
+                android:text="@string/pair_new_pc_hint"
                 android:textColor="#9AA7B8"
                 android:textSize="12sp" />
 
@@ -457,7 +457,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="其他方式："
+                    android:text="@string/label_other_ways"
                     android:textColor="#5F6D80"
                     android:textSize="12sp" />
 
@@ -466,7 +466,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:padding="8dp"
-                    android:text="扫码配对"
+                    android:text="@string/action_pair_by_scan"
                     android:textColor="#45C7F2"
                     android:textSize="13sp" />
 
@@ -475,7 +475,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:padding="8dp"
-                    android:text="输入配对码"
+                    android:text="@string/action_pair_by_code"
                     android:textColor="#45C7F2"
                     android:textSize="13sp" />
 
@@ -484,7 +484,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:padding="8dp"
-                    android:text="手动输入 IP"
+                    android:text="@string/action_manual_ip"
                     android:textColor="#45C7F2"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -515,7 +515,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="麦克风 → 电脑"
+                        android:text="@string/label_mic_to_pc"
                         android:textColor="#F2F5F9"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -530,7 +530,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="你的声音送到电脑，当麦克风用"
+                    android:text="@string/mic_card_desc"
                     android:textColor="#9AA7B8"
                     android:textSize="13sp" />
 
@@ -539,7 +539,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="● 正在发送"
+                    android:text="@string/mic_state_sending"
                     android:textColor="#2CE8A5"
                     android:textSize="12sp" />
 
@@ -554,7 +554,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="回声抑制"
+                        android:text="@string/label_echo_suppression"
                         android:textColor="#F2F5F9"
                         android:textSize="14sp" />
 
@@ -569,7 +569,7 @@
                     android:id="@+id/tvEchoStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="系统AEC已启用"
+                    android:text="@string/echo_aec_on"
                     android:textColor="#9AA7B8"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -591,7 +591,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="电脑 → 扬声器"
+                        android:text="@string/label_pc_to_speaker"
                         android:textColor="#F2F5F9"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -606,7 +606,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="电脑的声音从手机播放"
+                    android:text="@string/speaker_card_desc"
                     android:textColor="#9AA7B8"
                     android:textSize="13sp" />
 
@@ -615,7 +615,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="● 正在播放"
+                    android:text="@string/speaker_state_playing"
                     android:textColor="#45C7F2"
                     android:textSize="12sp" />
 
@@ -624,7 +624,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="⚠ 已拦截自身声音回放：电脑端的声音采集源可能包含了手机麦克风，请在电脑端改选采集设备"
+                    android:text="@string/loop_guard_note"
                     android:textColor="#FFB224"
                     android:textSize="12sp"
                     android:visibility="gone" />
@@ -639,7 +639,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="播放音量"
+                        android:text="@string/label_playback_volume"
                         android:textColor="#9AA7B8"
                         android:textSize="13sp" />
 
@@ -662,7 +662,7 @@
             android:layout_height="56dp"
             android:layout_marginTop="16dp"
             android:background="@drawable/btn_primary"
-            android:text="开始搜索"
+            android:text="@string/action_start_search"
             android:textColor="#052417"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -679,7 +679,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:gravity="center"
-            android:text="USB 连接同样自动识别，无需设置"
+            android:text="@string/usb_hint"
             android:textColor="#5F6D80"
             android:textSize="12sp" />
 
@@ -725,7 +725,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="扫码配对"
+                    android:text="@string/action_pair_by_scan"
                     android:textColor="#F2F5F9"
                     android:textSize="20sp"
                     android:textStyle="bold" />
@@ -735,7 +735,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:padding="8dp"
-                    android:text="🔦 手电"
+                    android:text="@string/action_torch"
                     android:textColor="#9AA7B8"
                     android:textSize="14sp" />
             </LinearLayout>
@@ -750,7 +750,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="对准电脑屏幕上的二维码"
+                android:text="@string/scan_hint_aim"
                 android:textColor="#F2F5F9"
                 android:textSize="16sp" />
 
@@ -758,7 +758,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="电脑端打开声桥，点「显示配对二维码」即可"
+                android:text="@string/scan_hint_pc"
                 android:textColor="#9AA7B8"
                 android:textSize="13sp" />
 
@@ -769,7 +769,7 @@
                 android:layout_marginTop="24dp"
                 android:gravity="center"
                 android:padding="12dp"
-                android:text="没有二维码？输入配对码 →"
+                android:text="@string/scan_to_code_link"
                 android:textColor="#45C7F2"
                 android:textSize="15sp" />
         </LinearLayout>
@@ -797,7 +797,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="4dp"
-            android:text="← 输入配对码"
+            android:text="@string/code_title"
             android:textColor="#F2F5F9"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -806,7 +806,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="电脑端打开声桥，点「显示配对码」，把 6 位数字输进来（配对码 10 分钟内有效）"
+            android:text="@string/code_hint"
             android:textColor="#9AA7B8"
             android:textSize="13sp" />
 
@@ -830,7 +830,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:text="输入后会自动查找这台电脑…"
+            android:text="@string/code_auto_hint"
             android:textColor="#5F6D80"
             android:textSize="12sp" />
 
@@ -850,7 +850,7 @@
             android:layout_marginTop="20dp"
             android:background="@drawable/btn_primary"
             android:enabled="false"
-            android:text="查找并配对"
+            android:text="@string/action_find_and_pair"
             android:textColor="#052417"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -862,7 +862,7 @@
             android:layout_marginTop="16dp"
             android:gravity="center"
             android:padding="10dp"
-            android:text="用扫码更快 → 扫码配对"
+            android:text="@string/code_to_scan_link"
             android:textColor="#45C7F2"
             android:textSize="15sp" />
     </LinearLayout>
@@ -880,7 +880,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="找到这台电脑"
+            android:text="@string/confirm_found_title"
             android:textColor="#F2F5F9"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -911,7 +911,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="核对验证码"
+                android:text="@string/confirm_verify_label"
                 android:textColor="#9AA7B8"
                 android:textSize="12sp" />
 
@@ -928,7 +928,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="与电脑屏幕上显示的 6 位数一致再点配对"
+                android:text="@string/confirm_verify_hint"
                 android:textColor="#9AA7B8"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -939,7 +939,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_banner"
-            android:text="配对失败，电脑那边没有确认，请重试"
+            android:text="@string/confirm_error_failed"
             android:textColor="#FF5C5C"
             android:textSize="13sp"
             android:visibility="gone" />
@@ -955,7 +955,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="自动连接"
+                android:text="@string/label_auto_connect"
                 android:textColor="#F2F5F9"
                 android:textSize="14sp" />
 
@@ -969,7 +969,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="这台电脑以后出现在同一网络时，自动连接并按上次的设置开始推流"
+            android:text="@string/confirm_auto_hint"
             android:textColor="#9AA7B8"
             android:textSize="13sp" />
 
@@ -979,7 +979,7 @@
             android:layout_height="56dp"
             android:layout_marginTop="20dp"
             android:background="@drawable/btn_primary"
-            android:text="确认配对"
+            android:text="@string/action_confirm_pair"
             android:textColor="#052417"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -991,7 +991,7 @@
             android:layout_marginTop="10dp"
             android:gravity="center"
             android:padding="10dp"
-            android:text="取消"
+            android:text="@string/action_cancel"
             android:textColor="#9AA7B8"
             android:textSize="15sp" />
     </LinearLayout>
@@ -1017,7 +1017,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="4dp"
-                android:text="← 设置"
+                android:text="@string/settings_title"
                 android:textColor="#F2F5F9"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -1046,7 +1046,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="重连方式"
+                        android:text="@string/settings_reconnect_title"
                         android:textColor="#F2F5F9"
                         android:textSize="14sp"
                         android:textStyle="bold" />
@@ -1061,7 +1061,7 @@
                             android:id="@+id/rbReconnectAsk"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="每次询问（离开较久回来时，先问我要不要连）"
+                            android:text="@string/reconnect_ask_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1069,7 +1069,7 @@
                             android:id="@+id/rbReconnectAuto"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="总是自动连接（一出现就连上）"
+                            android:text="@string/reconnect_auto_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1077,7 +1077,7 @@
                             android:id="@+id/rbReconnectNever"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="从不自动（只在列表里显示，我手动连）"
+                            android:text="@string/reconnect_never_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
                     </RadioGroup>
@@ -1086,7 +1086,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="短暂掉线（60 秒内）始终自动续连，不受此设置影响。每台电脑的「自动连接」开关在设备卡上，可单独关。"
+                        android:text="@string/reconnect_note"
                         android:textColor="#5F6D80"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -1109,7 +1109,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="后台运行"
+                            android:text="@string/settings_background_title"
                             android:textColor="#F2F5F9"
                             android:textSize="14sp"
                             android:textStyle="bold" />
@@ -1125,7 +1125,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="开着时声桥在后台/熄屏也能发现电脑并推流（前台服务）。关掉后只在打开 App 时运行。"
+                        android:text="@string/settings_background_desc"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
 
@@ -1143,7 +1143,7 @@
                         android:layout_height="48dp"
                         android:layout_marginTop="8dp"
                         android:background="@drawable/btn_secondary"
-                        android:text="去关闭电池优化（防后台被杀）"
+                        android:text="@string/action_battery_guide"
                         android:textColor="#F2F5F9"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -1166,7 +1166,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="回声抑制（手机端）"
+                            android:text="@string/settings_echo_title"
                             android:textColor="#F2F5F9"
                             android:textSize="14sp"
                             android:textStyle="bold" />
@@ -1198,7 +1198,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="声音输出"
+                        android:text="@string/settings_output_title"
                         android:textColor="#F2F5F9"
                         android:textSize="14sp"
                         android:textStyle="bold" />
@@ -1229,7 +1229,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="麦克风"
+                        android:text="@string/settings_mic_title"
                         android:textColor="#F2F5F9"
                         android:textSize="14sp"
                         android:textStyle="bold" />
@@ -1238,7 +1238,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="麦克风模式（下次连接时生效）"
+                        android:text="@string/settings_mic_mode_label"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
 
@@ -1251,7 +1251,7 @@
                             android:id="@+id/rbMicModeComm"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="语音通话（平台回声/降噪处理，外放时用）"
+                            android:text="@string/mic_mode_comm_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1259,7 +1259,7 @@
                             android:id="@+id/rbMicModeHd"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="高清拾音（只走自研回声链，耳机/安静环境最佳音质）"
+                            android:text="@string/mic_mode_hd_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1267,7 +1267,7 @@
                             android:id="@+id/rbMicModeAuto"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="自动（外放用通话，耳机用高清）"
+                            android:text="@string/mic_mode_auto_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
                     </RadioGroup>
@@ -1276,7 +1276,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="灵敏度"
+                        android:text="@string/settings_mic_sens_label"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
 
@@ -1289,7 +1289,7 @@
                             android:id="@+id/rbMicStd"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="标准"
+                            android:text="@string/mic_sens_std_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1297,7 +1297,7 @@
                             android:id="@+id/rbMicHigh"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="高灵敏（小声说话更容易被收录）"
+                            android:text="@string/mic_sens_high_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
                     </RadioGroup>
@@ -1306,7 +1306,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="降噪"
+                        android:text="@string/settings_ns_label"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
 
@@ -1319,7 +1319,7 @@
                             android:id="@+id/rbNsStd"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="标准（平台降噪开）"
+                            android:text="@string/ns_std_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
 
@@ -1327,7 +1327,7 @@
                             android:id="@+id/rbNsSoft"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="轻柔（平台降噪关，更保护小声人声）"
+                            android:text="@string/ns_soft_label"
                             android:textColor="#F2F5F9"
                             android:textSize="13sp" />
                     </RadioGroup>
@@ -1336,7 +1336,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="输入设备"
+                        android:text="@string/settings_input_device_label"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
 
@@ -1372,7 +1372,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="事件通知"
+                            android:text="@string/settings_notifications_title"
                             android:textColor="#F2F5F9"
                             android:textSize="14sp"
                             android:textStyle="bold" />
@@ -1388,7 +1388,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="自动连接、离开后回归询问等事件的通知。常驻的前台服务通知是系统要求，不受此开关影响。"
+                        android:text="@string/settings_notifications_desc"
                         android:textColor="#9AA7B8"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -1404,7 +1404,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="应用更新"
+                android:text="@string/settings_update_title"
                 android:textColor="#F2F5F9"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -1414,7 +1414,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="当前版本 2.0.0"
+                android:text="@string/update_info_placeholder"
                 android:textColor="#9AA7B8"
                 android:textSize="12sp" />
 
@@ -1424,7 +1424,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_input"
-                android:hint="更新地址 update.json"
+                android:hint="@string/update_url_hint"
                 android:inputType="textUri"
                 android:padding="10dp"
                 android:singleLine="true"
@@ -1438,7 +1438,7 @@
                 android:layout_height="48dp"
                 android:layout_marginTop="10dp"
                 android:background="@drawable/btn_secondary"
-                android:text="检查更新"
+                android:text="@string/action_check_update"
                 android:textColor="#F2F5F9"
                 android:textSize="15sp" />
         </LinearLayout>
@@ -1467,7 +1467,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="4dp"
-                android:text="← 附近的电脑"
+                android:text="@string/discover_title"
                 android:textColor="#F2F5F9"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -1478,7 +1478,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="正在探寻周边设备…"
+            android:text="@string/discover_searching"
             android:textColor="#9AA7B8"
             android:textSize="13sp" />
 
@@ -1500,7 +1500,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="还没探到电脑——确认电脑端声桥已打开、蓝牙和 WiFi 都开着"
+            android:text="@string/discover_empty"
             android:textColor="#5F6D80"
             android:textSize="13sp"
             android:visibility="gone" />
@@ -1515,7 +1515,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="其他方式："
+                android:text="@string/label_other_ways"
                 android:textColor="#5F6D80"
                 android:textSize="12sp" />
 
@@ -1524,7 +1524,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="扫码配对"
+                android:text="@string/action_pair_by_scan"
                 android:textColor="#45C7F2"
                 android:textSize="13sp" />
 
@@ -1533,7 +1533,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="输入配对码"
+                android:text="@string/action_pair_by_code"
                 android:textColor="#45C7F2"
                 android:textSize="13sp" />
 
@@ -1542,7 +1542,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:text="手动输入 IP"
+                android:text="@string/action_manual_ip"
                 android:textColor="#45C7F2"
                 android:textSize="13sp" />
         </LinearLayout>

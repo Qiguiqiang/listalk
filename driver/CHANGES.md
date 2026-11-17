@@ -1,7 +1,7 @@
 # CHANGES — 相对微软上游样本的全部改动
 
 基底：microsoft/Windows-driver-samples，路径 `audio/simpleaudiosample`
-（微软官方 Simple Audio Sample：一个扬声器 + 一个麦克风阵列端点、WaveRT、根枚举虚拟适配器——结构与声桥需求一一对应，故选它而非端点臃肿的 SYSVAD。）
+（微软官方 Simple Audio Sample：一个扬声器 + 一个麦克风阵列端点、WaveRT、根枚举虚拟适配器——结构与声音接力需求一一对应，故选它而非端点臃肿的 SYSVAD。）
 上游提交：`d49bb7d72f3651952b2b6e4ad28d14fe2247eb69`（2026-11-05），许可证 MS-PL（见 src/SimpleAudioSample 上游文件与仓库 LICENSE 口径）。
 
 与上游逐文件 diff 的结果：**仅 2 个文件被修改**，其余 44 个文件与上游逐字节一致。
@@ -12,16 +12,16 @@
 
 | 字符串 | 上游值 | 改后 |
 |---|---|---|
-| ProviderName | `TODO-Set-Provider` | `AirBridge` |
-| MfgName | `TODO-Set-Manufacturer` | `AirBridge` |
-| MsCopyRight | `TODO-Set-Copyright` | `Copyright (C) 2026 AirBridge` |
-| SIMPLEAUDIOSAMPLE_SA.DeviceDesc（**适配器设备名**，决定声音设置里括号内的名字、设备管理器显示名） | `Virtual Audio Device (WDM) - Simple Audio Sample` | `声桥 AirBridge 虚拟音频设备` |
-| SimpleAudioSample.SvcDesc（驱动服务显示名） | `Virtual Audio Device (WDM) - Simple Audio Sample Driver` | `声桥 AirBridge 虚拟音频设备驱动` |
-| WaveSpeaker.szPname | `Simple Audio Sample Wave Speaker` | `AirBridge Wave Speaker` |
-| TopologySpeaker.szPname | `Simple Audio Sample Topology Speaker` | `AirBridge Topology Speaker` |
-| WaveMicArray1.szPname | `Simple Audio Sample Wave Microphone Array - Front` | `AirBridge Wave Microphone` |
-| TopologyMicArray1.szPname | `Simple Audio Sample Topology Microphone Array - Front` | `AirBridge Topology Microphone` |
-| MicArray1CustomName（上游未被任何节引用，仅同步品牌化） | `Internal Microphone Array - Front` | `AirBridge Microphone` |
+| ProviderName | `TODO-Set-Provider` | `SoundRelay` |
+| MfgName | `TODO-Set-Manufacturer` | `SoundRelay` |
+| MsCopyRight | `TODO-Set-Copyright` | `Copyright (C) 2026 SoundRelay` |
+| SIMPLEAUDIOSAMPLE_SA.DeviceDesc（**适配器设备名**，决定声音设置里括号内的名字、设备管理器显示名） | `Virtual Audio Device (WDM) - Simple Audio Sample` | `声音接力 SoundRelay 虚拟音频设备` |
+| SimpleAudioSample.SvcDesc（驱动服务显示名） | `Virtual Audio Device (WDM) - Simple Audio Sample Driver` | `声音接力 SoundRelay 虚拟音频设备驱动` |
+| WaveSpeaker.szPname | `Simple Audio Sample Wave Speaker` | `SoundRelay Wave Speaker` |
+| TopologySpeaker.szPname | `Simple Audio Sample Topology Speaker` | `SoundRelay Topology Speaker` |
+| WaveMicArray1.szPname | `Simple Audio Sample Wave Microphone Array - Front` | `SoundRelay Wave Microphone` |
+| TopologyMicArray1.szPname | `Simple Audio Sample Topology Microphone Array - Front` | `SoundRelay Topology Microphone` |
+| MicArray1CustomName（上游未被任何节引用，仅同步品牌化） | `Internal Microphone Array - Front` | `SoundRelay Microphone` |
 | DriverVer | `02/22/2016, 1.0.0.1` | `11/17/2026, 2.0.0.0` |
 
 **未改（刻意保留，与上游一致）**：
@@ -40,8 +40,8 @@
 
 原因：端点显示名的前半段来自桥引脚 Category 的系统本地化名。上游是「麦克风阵列」，改后为「麦克风」，与扬声器侧（上游即 `KSNODETYPE_SPEAKER` →「扬声器」，未动）配对，最终显示为：
 
-- 输出：**扬声器 （声桥 AirBridge 虚拟音频设备）**
-- 输入：**麦克风 （声桥 AirBridge 虚拟音频设备）**
+- 输出：**扬声器 （声音接力 SoundRelay 虚拟音频设备）**
+- 输入：**麦克风 （声音接力 SoundRelay 虚拟音频设备）**
 
 内部标识（如 `eMicArrayDevice1`、MicArray* 函数/表名）不出现在任何用户界面，未改。
 
@@ -54,5 +54,5 @@
 
 ## 4. 本包阶段「未做」的事（诚实标注）
 
-- **音频数据通路尚未接 AirBridge App**：上游样本的 render 端点收到音频后按样本逻辑处理（丢弃/模拟），capture 端点输出样本的模拟信号（静音/测试音类行为，以样本代码为准）。本包的目标是「品牌端点出现且可被系统识别选中」；把 WaveRT 环形缓冲与 App 通过共享内存/IOCTL 打通是下一开发步（见调研报告 §2.2 的设计），不在本包内。
+- **音频数据通路尚未接 SoundRelay App**：上游样本的 render 端点收到音频后按样本逻辑处理（丢弃/模拟），capture 端点输出样本的模拟信号（静音/测试音类行为，以样本代码为准）。本包的目标是「品牌端点出现且可被系统识别选中」；把 WaveRT 环形缓冲与 App 通过共享内存/IOCTL 打通是下一开发步（见调研报告 §2.2 的设计），不在本包内。
 - 未在任何 Windows 机器上实际编译/安装验证（本沙箱为 Linux，无 WDK）。脚本已按微软文档与 WDK 常规路径编写并复核，但首次在 Windows 上跑通前，README 中的预期界面描述属于「按机制推导」，不是实测截图结论。

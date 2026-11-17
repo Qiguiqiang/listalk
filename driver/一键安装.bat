@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 rem ============================================================================
-rem  AirBridge Virtual Audio Driver - ONE-CLICK SETUP (Route A, TEST ONLY)
+rem  SoundRelay Virtual Audio Driver - ONE-CLICK SETUP (Route A, TEST ONLY)
 rem
 rem  Double-click this file. It does EVERYTHING by itself:
 rem    check Secure Boot -> build + sign driver -> import test certificate ->
@@ -15,7 +15,7 @@ rem  code page; embedding UTF-8 Chinese text can corrupt parsing. This is
 rem  the same convention as the other scripts in this package. README.md
 rem  explains every screen of this script in Chinese, line by line.
 rem ============================================================================
-title AirBridge Driver Setup
+title SoundRelay Driver Setup
 cd /d "%~dp0"
 
 rem --- ask for Administrator rights (a UAC prompt appears: click YES) ---
@@ -36,7 +36,7 @@ set "RO_KEY=HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
 set "RO_NAME=AirBridgeDriverSetup"
 
 echo ================================================================
-echo  AirBridge virtual audio driver - one-click setup
+echo  SoundRelay virtual audio driver - one-click setup
 echo  Everything is automatic. Do NOT close this window.
 echo ================================================================
 echo.
@@ -139,7 +139,7 @@ echo  If Windows asks for a BitLocker recovery key, type it in.
 echo ****************************************************************
 choice /c YN /m "Restart now"
 if errorlevel 2 goto :restart_later
-shutdown /r /t 5 /c "AirBridge driver setup"
+shutdown /r /t 5 /c "SoundRelay driver setup"
 exit /b 0
 :restart_later
 echo.
@@ -202,8 +202,8 @@ echo  SUCCESS - all done, nothing else to do.
 echo.
 echo  Open:  Settings ^> System ^> Sound
 echo  Two NEW devices are now in the lists (names are in Chinese):
-echo    Output:  Speakers    ( AirBridge Virtual Audio Device )
-echo    Input :  Microphone  ( AirBridge Virtual Audio Device )
+echo    Output:  Speakers    ( SoundRelay Virtual Audio Device )
+echo    Input :  Microphone  ( SoundRelay Virtual Audio Device )
 echo  README.md shows the exact Chinese names - compare there.
 echo ================================================================
 pause

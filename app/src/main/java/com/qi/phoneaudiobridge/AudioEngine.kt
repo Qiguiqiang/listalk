@@ -30,7 +30,7 @@ import kotlin.concurrent.thread
 import kotlin.math.abs
 
 /**
- * 声桥 AirBridge engine — MULTI-PC edition.
+ * 声音接力 SoundRelay engine — MULTI-PC edition.
  *
  * - One session per PC; phone mic fans out to every connected PC.
  * - Speaker audio from all PCs is mixed (sum + clamp) with per-PC
@@ -45,6 +45,23 @@ import kotlin.math.abs
  *   first-use inside the PC's pairing window) and they are remembered.
  */
 object AudioEngine {
+
+    /** Localized user-visible string via the app context (set by
+     *  [attachContext] / [start]); empty before a context exists. */
+    private fun str(resId: Int, vararg args: Any): String {
+        val ctx = appContext ?: return ""
+        return if (args.isEmpty()) ctx.getString(resId) else ctx.getString(resId, *args)
+    }
+
+    /** Give the engine a context for localized strings BEFORE it starts
+     *  (called from MainActivity.onCreate / BridgeService.onCreate) so
+     *  status / device-name strings resolve in the system language from
+     *  the very first frame. Does not start the engine. */
+    fun attachContext(context: Context) {
+        if (appContext == null) appContext = context.applicationContext
+        if (statusText.isEmpty()) statusText = str(R.string.engine_status_not_started)
+        if (playoutDiagText.isEmpty()) playoutDiagText = str(R.string.playout_diag_not_started)
+    }
     private const val TAG = "AirBridge"
 
     // ---------------- persistent registry ----------------
@@ -151,7 +168,7 @@ object AudioEngine {
     // ---------------- UI-visible aggregate state ----------------
 
     @Volatile var running = false
-    @Volatile var statusText = "未启动"
+    @Volatile var statusText = ""
     @Volatile var micEnabled = true
     @Volatile var speakerEnabled = true
     @Volatile var currentRateCode = Protocol.RATE_48K
@@ -208,6 +225,33 @@ object AudioEngine {
     /** Loop-guard (defect 5c): own-voice return detector on the speaker path. */
     val loopGuard = LoopGuard()
     @Volatile var loopNoteUntilMs = 0L
+
+    // ---- playout health (v2.2 speaker-no-sound fix) ----
+    // The v2.1 chain could fail SILENTLY at three points: the route pin
+    // was never confirmed, AudioTrack.write()'s result was discarded,
+    // and nobody watched the playback head. All three are now observed:
+    // the watchdog rebuilds a dead track, route drift is re-pinned once
+    // per second, and the live state is exposed for the diagnostics UI.
+    val playoutWatchdog = PlayoutWatchdog()
+    @Volatile var trackWriteErrors = 0
+    @Volatile var trackRebuilds = 0
+    @Volatile var playoutFaultText: String? = null
+    @Volatile var playoutFaultUntilMs = 0L
+    /** True while a playout fault note should be visible in the UI. */
+    val playoutFaultActive: Boolean get() = System.currentTimeMillis() < playoutFaultUntilMs
+    /** One-line live playout diagnostics (settings screen). */
+    @Volatile var playoutDiagText: String = ""
+    /** Times the confirmed output route drifted from the pinned target. */
+    @Volatile var routeReapplyCount = 0
+    /** Sticky flag: setCommunicationDevice last returned false. */
+    @Volatile var routePinFailed = false
+    /** deviceKey of the output we last pinned (route-drift watchdog). */
+    @Volatile private var expectedOutputKey: String? = null
+
+    private fun notePlayoutFault(text: String) {
+        playoutFaultText = text
+        playoutFaultUntilMs = System.currentTimeMillis() + 8000
+    }
     /** True while the loop-guard note should be visible in the UI. */
     val loopGuardNoteActive: Boolean get() = System.currentTimeMillis() < loopNoteUntilMs
     private var audioFocusRequest: android.media.AudioFocusRequest? = null
@@ -282,29 +326,29 @@ object AudioEngine {
     private fun friendlyName(d: android.media.AudioDeviceInfo): String {
         val pn = try { d.productName?.toString()?.trim().orEmpty() } catch (_: Exception) { "" }
         return when (d.type) {
-            android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "本机扬声器"
-            android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "听筒"
+            android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> str(R.string.device_speaker)
+            android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> str(R.string.device_earpiece)
             android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC -> {
                 // Several built-in mics may exist; the platform address
                 // ("bottom"/"back"/"front" on many devices) tells them apart.
                 val addr = if (Build.VERSION.SDK_INT >= 28) try { d.address } catch (_: Exception) { "" } else ""
                 when {
-                    addr.contains("bottom", true) -> "手机麦克风（底部·主麦）"
-                    addr.contains("back", true) -> "手机麦克风（背面）"
-                    addr.contains("front", true) -> "手机麦克风（正面）"
-                    addr.isNotEmpty() -> "手机麦克风（$addr）"
-                    else -> "手机麦克风"
+                    addr.contains("bottom", true) -> str(R.string.device_phone_mic_bottom)
+                    addr.contains("back", true) -> str(R.string.device_phone_mic_back)
+                    addr.contains("front", true) -> str(R.string.device_phone_mic_front)
+                    addr.isNotEmpty() -> str(R.string.device_phone_mic_addr, addr)
+                    else -> str(R.string.device_phone_mic)
                 }
             }
             else -> pn.ifEmpty {
                 when (d.type) {
                     android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
-                    android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "有线耳机"
+                    android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> str(R.string.device_wired_headset)
                     android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
                     android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
                     android.media.AudioDeviceInfo.TYPE_BLE_HEADSET,
-                    android.media.AudioDeviceInfo.TYPE_BLE_SPEAKER -> "蓝牙耳机"
-                    else -> "音频设备"
+                    android.media.AudioDeviceInfo.TYPE_BLE_SPEAKER -> str(R.string.device_bt_headset)
+                    else -> str(R.string.device_audio_generic)
                 }
             }
         }
@@ -365,16 +409,16 @@ object AudioEngine {
                 @Suppress("DEPRECATION")
                 when {
                     am.isBluetoothScoOn -> commDevices().firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
-                        ?: CommDevice(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO, "蓝牙耳机", true)
+                        ?: CommDevice(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO, str(R.string.device_bt_headset), true)
                     am.isWiredHeadsetOn -> commDevices().firstOrNull { isHeadsetType(it.type) }
-                    am.isSpeakerphoneOn -> CommDevice(android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, "本机扬声器", false)
-                    else -> CommDevice(android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE, "听筒", false)
+                    am.isSpeakerphoneOn -> CommDevice(android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, str(R.string.device_speaker), false)
+                    else -> CommDevice(android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE, str(R.string.device_earpiece), false)
                 }
             }
         } catch (_: Exception) { null }
     }
 
-    val outputRouteText: String get() = actualOutputDevice()?.name ?: "本机扬声器"
+    val outputRouteText: String get() = actualOutputDevice()?.name ?: str(R.string.device_speaker)
 
     /** True when the confirmed output is a headset (echo risk minimal). */
     val headsetOutputActive: Boolean get() = actualOutputDevice()?.headset == true
@@ -390,27 +434,38 @@ object AudioEngine {
      * resamples at that device boundary — the network/session rate is
      * never renegotiated (defect 2 fixed-config rule).
      */
+    /** The output device the current selection WANTS (before pinning). */
+    private fun desiredOutput(devices: List<CommDevice>): CommDevice? = when {
+        outputDeviceSel == "auto" ->
+            devices.firstOrNull { it.headset }
+                ?: devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        else -> devices.firstOrNull { deviceKey(it.type, it.name) == outputDeviceSel }
+            ?: run {
+                routeFallbackNote = str(R.string.route_fallback_selected_gone)
+                devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+            }
+    }
+
     fun applyOutputRoute() {
         val ctx = appContext ?: return
         try {
             val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
             val devices = commDevices()
-            val target: CommDevice? = when {
-                outputDeviceSel == "auto" ->
-                    devices.firstOrNull { it.headset }
-                        ?: devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                else -> devices.firstOrNull { deviceKey(it.type, it.name) == outputDeviceSel }
-                    ?: run {
-                        routeFallbackNote = "所选输出设备已断开，已回退到本机扬声器"
-                        devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                    }
-            }
+            val target: CommDevice? = desiredOutput(devices)
+            expectedOutputKey = target?.let { deviceKey(it.type, it.name) }
             if (Build.VERSION.SDK_INT >= 31) {
                 if (target != null) {
                     val dev = am.availableCommunicationDevices.firstOrNull {
                         it.type == target.type && friendlyName(it) == target.name
                     }
-                    if (dev != null) am.setCommunicationDevice(dev)
+                    // v2.1 defect: the return value was DISCARDED — a
+                    // rejected pin left audio on the earpiece with no
+                    // trace anywhere. Record failures; the drift check
+                    // in adaptLoop keeps re-pinning until it sticks.
+                    if (dev != null && !am.setCommunicationDevice(dev)) {
+                        routePinFailed = true
+                        Log.w(TAG, "setCommunicationDevice(${target.name}) returned false")
+                    }
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -436,6 +491,25 @@ object AudioEngine {
     @Suppress("DEPRECATION")
     private fun stopLegacySco(am: android.media.AudioManager) {
         try { if (am.isBluetoothScoOn) { am.isBluetoothScoOn = false; am.stopBluetoothSco() } } catch (_: Exception) {}
+    }
+
+    /**
+     * Route-drift watchdog (v2.2): once per second (from adaptLoop),
+     * compare the CONFIRMED communication device against the pinned
+     * target and re-pin on drift. OEM audio stacks silently reset the
+     * communication device when streams start or devices change
+     * (research note §1.2) — v2.1 pinned once and never verified, so a
+     * reset left playback on the earpiece indefinitely.
+     */
+    private fun confirmOutputRoute() {
+        if (Build.VERSION.SDK_INT < 31 || !running) return
+        val desired = desiredOutput(commDevices()) ?: return
+        val actual = actualOutputDevice() ?: return
+        if (deviceKey(actual.type, actual.name) != deviceKey(desired.type, desired.name)) {
+            routeReapplyCount++
+            Log.w(TAG, "output route drift: actual=${actual.name} desired=${desired.name}; re-pinning (#$routeReapplyCount)")
+            applyOutputRoute()
+        }
     }
 
     /**
@@ -477,7 +551,7 @@ object AudioEngine {
 
     /** Actual capture device + mode (confirmed via the routed device). */
     fun actualInputText(): String {
-        var name = "手机麦克风"
+        var name = str(R.string.device_phone_mic)
         val rec = recorder
         if (rec != null && Build.VERSION.SDK_INT >= 23) {
             try {
@@ -486,9 +560,9 @@ object AudioEngine {
         }
         if (rec == null) return name
         val mode = when {
-            builtMicHd -> "高清拾音（自研回声链）"
-            builtMicSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION -> "语音通话处理"
-            else -> "标准处理"
+            builtMicHd -> str(R.string.input_mode_hd)
+            builtMicSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION -> str(R.string.input_mode_comm)
+            else -> str(R.string.input_mode_standard)
         }
         return "$name · $mode"
     }
@@ -526,7 +600,7 @@ object AudioEngine {
         // Selected output vanished -> graceful fallback + note (in applyOutputRoute).
         removed?.forEach { d ->
             if (outputDeviceSel == deviceKey(d.type, friendlyName(d))) {
-                routeFallbackNote = "耳机已断开，已回退到本机扬声器"
+                routeFallbackNote = str(R.string.route_fallback_headset_gone)
             }
         }
         knownDeviceKeys.clear()
@@ -563,7 +637,7 @@ object AudioEngine {
             s.connected = false
             s.resetJitterBuffer()
         }
-        statusText = "已暂停"
+        statusText = str(R.string.state_paused)
     }
 
     /** Resume after pauseAll(): re-arm auto-connect for present paired PCs. */
@@ -629,6 +703,8 @@ object AudioEngine {
 
     fun start(context: Context) {
         appContext = context.applicationContext
+        if (statusText.isEmpty()) statusText = str(R.string.engine_status_not_started)
+        if (playoutDiagText.isEmpty()) playoutDiagText = str(R.string.playout_diag_not_started)
         prefs = appContext!!.getSharedPreferences("airbridge_registry", Context.MODE_PRIVATE)
         loadIdentityAndRegistry()
         reloadSettings()
@@ -642,11 +718,11 @@ object AudioEngine {
             socket = s
         } catch (e: Exception) {
             Log.e(TAG, "bind failed", e)
-            statusText = "端口 ${Protocol.PORT} 绑定失败: ${e.message}"
+            statusText = str(R.string.engine_status_bind_failed, Protocol.PORT, e.message.toString())
             return
         }
         running = true
-        statusText = "正在寻找你的电脑…"
+        statusText = str(R.string.status_searching_pc)
         // ONE persistent audio configuration for the whole session (defects
         // 1+2, research note §5.1): save old mode -> MODE_IN_COMMUNICATION
         // -> audio focus -> explicit output route -> THEN build streams.
@@ -817,7 +893,7 @@ object AudioEngine {
         if (!running) return
         val now = System.currentTimeMillis()
         Log.i(TAG, "network changed, local IPs now $lastLocalIps — rebinding + re-resolving")
-        statusText = "网络已切换，正在重新连接…"
+        statusText = str(R.string.engine_status_network_changed)
         rebindSocket()
         // mDNS browsing is scoped to the old network: restart it.
         try { mdnsDiscovery?.stop() } catch (_: Exception) {}
@@ -841,8 +917,8 @@ object AudioEngine {
     private var bleDiscovery: BleDiscovery? = null
     private var mdnsDiscovery: MdnsDiscovery? = null
 
-    val bleStatusText: String get() = bleDiscovery?.statusText ?: "BLE 未启动"
-    val mdnsStatusText: String get() = mdnsDiscovery?.statusText ?: "mDNS 未启动"
+    val bleStatusText: String get() = bleDiscovery?.statusText ?: str(R.string.ble_status_not_started)
+    val mdnsStatusText: String get() = mdnsDiscovery?.statusText ?: str(R.string.mdns_status_not_started)
 
     private fun startDiscovery() {
         val ctx = appContext ?: return
@@ -954,10 +1030,11 @@ object AudioEngine {
         nearby.clear()
         pendingReturnAsk = null
         sessions.clear()
-        statusText = "已停止"
+        statusText = str(R.string.engine_status_stopped)
         try { socket?.close() } catch (_: Exception) {}
         socket = null
         releaseDevices()
+        playoutWatchdog.reset()
         echoProcessor.reset()
         howlGainDb = 0f
         nlmsActive = false
@@ -1230,7 +1307,7 @@ object AudioEngine {
 
     fun pairingInfo(deviceId: String): String? {
         val d = registry[deviceId] ?: return null
-        return "设备 ID：${d.deviceId}\n密钥指纹：${tokenHash(d.token).substring(0, 16)}\n上次 IP：${d.lastIp}"
+        return str(R.string.pairing_info_format, d.deviceId, tokenHash(d.token).substring(0, 16), d.lastIp)
     }
 
     fun forgetDevice(deviceId: String) {
@@ -1391,7 +1468,7 @@ object AudioEngine {
                     val json = String(buf, Protocol.HEADER_SIZE, pkt.length - Protocol.HEADER_SIZE, Charsets.UTF_8)
                     onHelloAck(s, json)
                     if (h.rateCode != currentRateCode) applyRate(h.rateCode)
-                    statusText = "已连接 ${connectedCount} 台电脑"
+                    statusText = str(R.string.hero_connected_title, connectedCount)
                     if (!wasConnected && s.autoInitiated && s.pendingPairToken == null) {
                         // §5: auto-connect happened — banner in UI, silent notification in background
                         s.justAutoConnectedMs = nowMs
@@ -1510,7 +1587,7 @@ object AudioEngine {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             if (Build.VERSION.SDK_INT >= 26) {
                 nm.createNotificationChannel(
-                    android.app.NotificationChannel("airbridge_ask", "回归询问", android.app.NotificationManager.IMPORTANCE_DEFAULT)
+                    android.app.NotificationChannel("airbridge_ask", str(R.string.notif_channel_return_ask), android.app.NotificationManager.IMPORTANCE_DEFAULT)
                 )
             }
             val openIntent = android.content.Intent(ctx, MainActivity::class.java)
@@ -1526,12 +1603,12 @@ object AudioEngine {
                     android.app.PendingIntent.getService(ctx, req, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
             }
             val n = android.app.Notification.Builder(ctx, "airbridge_ask")
-                .setContentTitle("声桥 AirBridge")
-                .setContentText("$name 回来了，要连接吗？")
+                .setContentTitle("声音接力 SoundRelay")
+                .setContentText(str(R.string.return_ask_text, name))
                 .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
                 .setContentIntent(openPi)
-                .addAction(android.app.Notification.Action.Builder(null, "连接", actionPi(BridgeService.ACTION_RETURN_CONNECT, 31)).build())
-                .addAction(android.app.Notification.Action.Builder(null, "忽略", actionPi(BridgeService.ACTION_RETURN_IGNORE, 32)).build())
+                .addAction(android.app.Notification.Action.Builder(null, str(R.string.action_connect), actionPi(BridgeService.ACTION_RETURN_CONNECT, 31)).build())
+                .addAction(android.app.Notification.Action.Builder(null, str(R.string.action_ignore), actionPi(BridgeService.ACTION_RETURN_IGNORE, 32)).build())
                 .setAutoCancel(true)
                 .build()
             nm.notify(3, n)
@@ -1611,9 +1688,9 @@ object AudioEngine {
         val recent = sessions.values.filter { it.justAutoConnectedMs > 0 && now - it.justAutoConnectedMs < 4000 }
         val names = recent.map { pairedFor(it)?.displayName ?: it.name }
         lastAutoEventText = if (names.size > 1) {
-            "已自动连接 ${names.size} 台电脑：${names.joinToString("、")}"
+            str(R.string.auto_event_multi, names.size, names.joinToString(str(R.string.list_separator)))
         } else {
-            "已自动连接 ${pairedFor(s)?.displayName ?: s.name}"
+            str(R.string.auto_event_single, pairedFor(s)?.displayName ?: s.name)
         }
         lastAutoEventIps = recent.map { it.ip }
         lastAutoEventAtMs = now
@@ -1626,7 +1703,7 @@ object AudioEngine {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             if (Build.VERSION.SDK_INT >= 26) {
                 nm.createNotificationChannel(
-                    android.app.NotificationChannel("airbridge_auto", "自动连接通知", android.app.NotificationManager.IMPORTANCE_LOW)
+                    android.app.NotificationChannel("airbridge_auto", str(R.string.notif_channel_auto), android.app.NotificationManager.IMPORTANCE_LOW)
                 )
             }
             val intent = android.content.Intent(ctx, MainActivity::class.java)
@@ -1635,8 +1712,8 @@ object AudioEngine {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             val n = android.app.Notification.Builder(ctx, "airbridge_auto")
-                .setContentTitle("声桥 AirBridge")
-                .setContentText("$text，正在推流")
+                .setContentTitle("声音接力 SoundRelay")
+                .setContentText(str(R.string.auto_connected_notif_text, text))
                 .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
                 .setContentIntent(pi)
                 .setAutoCancel(true)
@@ -1704,6 +1781,10 @@ object AudioEngine {
                 lastDiscoverMs = nowMs
             }
 
+            // route-drift watchdog: re-pin if the OEM stack moved the
+            // confirmed communication device away from our target.
+            confirmOutputRoute()
+
             // presence staleness edges (v2.1): a session whose beacons stop
             // becomes "absent" — the absence clock for the re-entry logic.
             for (s in sessions.values) {
@@ -1762,7 +1843,7 @@ object AudioEngine {
                         s.connected = false
                         reconnectCount++
                         s.resetJitterBuffer()
-                        statusText = "与 ${s.name} 的连接中断，自动重连中…"
+                        statusText = str(R.string.engine_status_disconnected_reconnecting, s.name)
                     }
                     if (s.lossPct > 5.0 || s.jitterMs > 15.0) anyBad = true
                     if (!(s.lossPct < 1.0 && s.jitterMs < 5.0)) allGood = false
@@ -1870,11 +1951,11 @@ object AudioEngine {
                 }
             }
             statusText = when {
-                isolatedName != null -> "能发现 $isolatedName，但连不上——路由器可能开启了设备隔离/访客网络"
-                sessions.values.any { it.reResolving } -> "正在重新连接…"
-                connectedCount > 0 -> "已连接 $connectedCount 台电脑"
-                sessions.values.any { it.wantConnect } -> "正在连接电脑…"
-                else -> "正在寻找你的电脑…"
+                isolatedName != null -> str(R.string.engine_status_isolated, isolatedName)
+                sessions.values.any { it.reResolving } -> str(R.string.engine_status_reconnecting)
+                connectedCount > 0 -> str(R.string.hero_connected_title, connectedCount)
+                sessions.values.any { it.wantConnect } -> str(R.string.engine_status_connecting)
+                else -> str(R.string.status_searching_pc)
             }
         }
     }
@@ -2008,6 +2089,10 @@ object AudioEngine {
             if (recorder == null) {
                 if (!buildRecorder()) { Thread.sleep(300); continue }
                 recorderBuiltRate = currentRateCode
+                // Starting the record stream is one of the events that
+                // makes OEM stacks reset the communication device
+                // (research note §1.2): re-pin OUR route afterwards.
+                applyOutputRoute()
             }
             val rec = recorder ?: continue
             val frameSamples = Protocol.frameSamples(currentRateCode)
@@ -2109,6 +2194,7 @@ object AudioEngine {
                 t.play()
                 track = t
                 trackRateHz = rate
+                playoutWatchdog.onTrackStarted(System.currentTimeMillis())
                 return true
             } catch (e: Exception) {
                 Log.w(TAG, "track @${rate}Hz failed: ${e.message}")
@@ -2120,6 +2206,7 @@ object AudioEngine {
     private fun releaseTrack() { try { track?.stop() } catch (_: Exception) {}; try { track?.release() } catch (_: Exception) {}; track = null }
 
     private fun playoutLoop() {
+        var lastHeadSampleMs = 0L
         while (running) {
             val sources = sessions.values.filter { it.connected && effectiveSpeakerRecv(it) }
             if (sources.isEmpty()) { Thread.sleep(15); continue }
@@ -2188,9 +2275,50 @@ object AudioEngine {
                 out[i * 2] = (finalShorts[i].toInt() and 0xFF).toByte()
                 out[i * 2 + 1] = ((finalShorts[i].toInt() shr 8) and 0xFF).toByte()
             }
-            try {
-                t.write(out, 0, out.size)
-            } catch (_: Exception) { Thread.sleep(5) }
+            // v2.1 defect: write()'s return value was DISCARDED and the
+            // exception path just slept 5 ms and kept writing into the
+            // same dead track forever — total silence, no trace. A
+            // failed write now rebuilds the track, and the watchdog
+            // below catches the sneakier case (writes "succeed" but
+            // the play head never advances).
+            val written = try { t.write(out, 0, out.size) } catch (_: Exception) { -1 }
+            if (written < 0) {
+                trackWriteErrors++
+                Log.e(TAG, "AudioTrack.write -> $written; rebuilding track")
+                notePlayoutFault(str(R.string.playout_fault_interrupted))
+                releaseTrack()
+                trackRebuilds++
+                Thread.sleep(50)
+                continue
+            }
+            playoutWatchdog.onWrite(finalShorts.size)
+            // Health sampling ~4x/s: head liveness + diagnostics line.
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastHeadSampleMs >= 250) {
+                lastHeadSampleMs = nowMs
+                val head = try { t.playbackHeadPosition } catch (_: Exception) { -1 }
+                if (head >= 0 && playoutWatchdog.onHeadSample(head, nowMs)) {
+                    Log.e(TAG, "playback head stalled at $head while writing; rebuilding track")
+                    notePlayoutFault(str(R.string.playout_fault_stalled))
+                    releaseTrack()
+                    trackRebuilds++
+                    continue
+                }
+                val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                val vol = am?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: -1
+                val volMax = am?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: -1
+                val stateName = when (try { t.playState } catch (_: Exception) { -1 }) {
+                    AudioTrack.PLAYSTATE_PLAYING -> str(R.string.track_state_playing)
+                    AudioTrack.PLAYSTATE_PAUSED -> str(R.string.state_paused)
+                    AudioTrack.PLAYSTATE_STOPPED -> str(R.string.engine_status_stopped)
+                    else -> str(R.string.track_state_unknown)
+                }
+                playoutDiagText = str(
+                    R.string.playout_diag_format,
+                    actualOutputDevice()?.name ?: "?", stateName, head,
+                    trackWriteErrors, trackRebuilds, routeReapplyCount, vol, volMax
+                )
+            }
         }
         releaseTrack()
     }

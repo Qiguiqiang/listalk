@@ -54,7 +54,9 @@ fun main() {
     // ---- v2.2 defect B: failure surface is a HARD check (dead port) ----
     val repDown = UpdateChecker.fetchManifestReport("http://127.0.0.1:18799/update.json")
     println("ANDROID report(unreachable): ${repDown.summary}")
-    check(repDown.httpCode == -1 && repDown.error?.startsWith("网络不可达") == true) { "unreachable must surface a plain reason" }
+    // v2.2 i18n: UpdateChecker defaults to English templates headless;
+    // MainActivity injects the localized (values/values-en) strings.
+    check(repDown.httpCode == -1 && repDown.error?.startsWith("Network unreachable") == true) { "unreachable must surface a plain reason" }
     check(UpdateChecker.lastCheckSummary == repDown.summary) { "diagnostics summary must be recorded" }
 
     // ---- live HTTP sections (conditional on the sandbox filter) ----

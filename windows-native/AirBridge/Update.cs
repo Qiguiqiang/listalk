@@ -21,8 +21,8 @@ namespace AirBridge;
 /// </summary>
 public static class UpdateChecker
 {
-    public const string UpdateManifestUrl = "https://muse.ai/s/airbridge-update/update.json";
-    public const string CurrentVersion = "2.1.0";
+    public const string UpdateManifestUrl = "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json";
+    public const string CurrentVersion = "2.2.0";
 
     public sealed record UpdateInfo(string Version, string Url, string Sha256, string Notes);
     public sealed record ManifestInfo(UpdateInfo? Windows, UpdateInfo? Android);
@@ -42,7 +42,7 @@ public static class UpdateChecker
     public static async Task<ManifestInfo?> FetchAsync(string manifestUrl)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.1.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.0");
         string json = await http.GetStringAsync(manifestUrl);
         using var doc = JsonDocument.Parse(json);
         return new ManifestInfo(ParseEntry(doc.RootElement, "windows"), ParseEntry(doc.RootElement, "android"));
@@ -67,28 +67,28 @@ public static class UpdateChecker
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.1.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.0");
             using var resp = await http.GetAsync(manifestUrl);
             int code = (int)resp.StatusCode;
             if (!resp.IsSuccessStatusCode)
-                return new FetchReport(manifestUrl, code, null, $"服务器返回 HTTP {code}");
+                return new FetchReport(manifestUrl, code, null, Loc.F("服务器返回 HTTP {0}", "Server returned HTTP {0}", code));
             string json = await resp.Content.ReadAsStringAsync();
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var manifest = new ManifestInfo(ParseEntry(doc.RootElement, "windows"), ParseEntry(doc.RootElement, "android"));
                 if (manifest.Windows is null && manifest.Android is null)
-                    return new FetchReport(manifestUrl, code, null, "更新清单无效（内容无法解析）");
+                    return new FetchReport(manifestUrl, code, null, Loc.Tr("更新清单无效（内容无法解析）"));
                 return new FetchReport(manifestUrl, code, manifest, null);
             }
             catch (JsonException)
             {
-                return new FetchReport(manifestUrl, code, null, "更新清单无效（内容无法解析）");
+                return new FetchReport(manifestUrl, code, null, Loc.Tr("更新清单无效（内容无法解析）"));
             }
         }
         catch (Exception ex)
         {
-            return new FetchReport(manifestUrl, null, null, $"网络不可达：{ex.Message}");
+            return new FetchReport(manifestUrl, null, null, Loc.F("网络不可达：{0}", "Network unreachable: {0}", ex.Message));
         }
     }
 
@@ -106,7 +106,7 @@ public static class UpdateChecker
     {
         string dest = Path.Combine(Path.GetTempPath(), $"AirBridge-Setup-{info.Version}.exe");
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.1.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.0");
         using var resp = await http.GetAsync(info.Url, HttpCompletionOption.ResponseHeadersRead);
         resp.EnsureSuccessStatusCode();
         long total = resp.Content.Headers.ContentLength ?? -1;
@@ -163,7 +163,7 @@ public static class UpdateDialog
                     var data = gen.CreateQrCode(qrPayload, QRCoder.QRCodeGenerator.ECCLevel.M);
                     var png = new QRCoder.PngByteQRCode(data).GetGraphic(8);
                     panel.Children.Add(new Image { Source = new Avalonia.Media.Imaging.Bitmap(new MemoryStream(png)), Width = 180, Height = 180, HorizontalAlignment = HorizontalAlignment.Center });
-                    panel.Children.Add(new TextBlock { Text = "用手机扫码打开手机端更新页", Foreground = fg2, HorizontalAlignment = HorizontalAlignment.Center });
+                    panel.Children.Add(new TextBlock { Text = Loc.Tr("用手机扫码打开手机端更新页"), Foreground = fg2, HorizontalAlignment = HorizontalAlignment.Center });
                 }
                 catch { }
             }
@@ -231,7 +231,7 @@ public static class UiDialogs
             var panel = new StackPanel { Margin = new Thickness(20), Spacing = 14 };
             panel.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = Avalonia.Media.FontWeight.Bold, Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#F2F5F9")) });
             panel.Children.Add(new TextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#9AA7B8")) });
-            var ok = new Button { Content = "知道了", HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = Loc.Tr("知道了"), HorizontalAlignment = HorizontalAlignment.Right };
             ok.Click += (_, _) => { tcs.TrySetResult(true); win.Close(); };
             win.Closed += (_, _) => tcs.TrySetResult(true);
             panel.Children.Add(ok);

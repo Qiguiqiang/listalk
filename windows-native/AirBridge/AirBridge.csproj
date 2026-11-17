@@ -14,8 +14,8 @@
     <ApplicationIcon>airbridge.ico</ApplicationIcon>
     <AssemblyName>AirBridge</AssemblyName>
     <RootNamespace>AirBridge</RootNamespace>
-    <Product>声桥 AirBridge</Product>
-    <Version>2.1.0</Version>
+    <Product>声音接力 SoundRelay</Product>
+    <Version>2.2.0</Version>
     <Company>Gray</Company>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>

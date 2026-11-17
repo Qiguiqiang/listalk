@@ -34,8 +34,33 @@ import java.security.MessageDigest
  * URIs are rejected by the installer on API 24+.
  */
 object UpdateChecker {
-    const val APP_VERSION = "2.1.0"
-    const val DEFAULT_UPDATE_MANIFEST_URL = "https://muse.ai/s/airbridge-update/update.json"
+    const val APP_VERSION = "2.2.0"
+    const val DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json"
+
+    /**
+     * User-visible templates for fetch failures / the diagnostics summary.
+     * This object must stay JVM-compilable WITHOUT Android resources (the
+     * tools/update-harness-android harness compiles it standalone), so it
+     * cannot reference R.string directly: the English defaults below keep
+     * it usable headless, and MainActivity injects the localized strings
+     * from resources at startup (see wireUpdateUi). Locale follows the
+     * system via the normal values / values-en resource split.
+     */
+    class Strings(
+        val summaryFailed: (String) -> String,
+        val summaryNone: String,
+        val errorHttp: (Int) -> String,
+        val errorInvalidManifest: String,
+        val errorNetwork: (String) -> String
+    )
+
+    @Volatile var strings: Strings = Strings(
+        summaryFailed = { "Failed: $it" },
+        summaryNone = "none",
+        errorHttp = { "Server returned HTTP $it" },
+        errorInvalidManifest = "Invalid update manifest (could not be parsed)",
+        errorNetwork = { "Network unreachable: $it" }
+    )
 
     data class UpdateInfo(val version: String, val url: String, val sha256: String, val notes: String)
 
@@ -67,7 +92,7 @@ object UpdateChecker {
      * a silent no-op, so every fetch returns what actually happened —
      * the URL tried, the HTTP status, the parsed versions of BOTH
      * entries, and a plain-language error when it failed. The UI renders
-     * exactly one of: 已是最新版本 / 发现新版本 / 检查失败：<reason>.
+     * exactly one of: up-to-date / new-version / check-failed:<reason>.
      */
     data class FetchReport(
         val url: String,
@@ -79,8 +104,8 @@ object UpdateChecker {
         /** One-line diagnostics summary (URL + HTTP status + versions). */
         val summary: String
             get() = "GET $url → " + when {
-                error != null -> "失败：$error"
-                else -> "HTTP $httpCode · android=${info?.version ?: "无"} · windows=${partnerVersion ?: "无"}"
+                error != null -> strings.summaryFailed(error)
+                else -> "HTTP $httpCode · android=${info?.version ?: strings.summaryNone} · windows=${partnerVersion ?: strings.summaryNone}"
             }
     }
 
@@ -105,18 +130,18 @@ object UpdateChecker {
             }
             val code = conn.responseCode
             if (code !in 200..299) {
-                FetchReport(manifestUrl, code, null, null, "服务器返回 HTTP $code")
+                FetchReport(manifestUrl, code, null, null, strings.errorHttp(code))
             } else {
                 val text = conn.inputStream.bufferedReader(Charsets.UTF_8).readText()
                 val info = parseManifest(text)
                 if (info == null) {
-                    FetchReport(manifestUrl, code, null, null, "更新清单无效（内容无法解析）")
+                    FetchReport(manifestUrl, code, null, null, strings.errorInvalidManifest)
                 } else {
                     FetchReport(manifestUrl, code, info, parsePartnerVersion(text), null)
                 }
             }
         } catch (e: Exception) {
-            FetchReport(manifestUrl, -1, null, null, "网络不可达：${e.message ?: e.javaClass.simpleName}")
+            FetchReport(manifestUrl, -1, null, null, strings.errorNetwork(e.message ?: e.javaClass.simpleName))
         } finally {
             conn?.disconnect()
         }

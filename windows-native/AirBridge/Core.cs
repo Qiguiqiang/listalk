@@ -98,6 +98,18 @@ public sealed class AppSettings
     public bool MicToPc { get; set; } = true;
     public bool PcToPhone { get; set; } = true;
     public bool Paused { get; set; } = false;
+    /// <summary>Desktop UI (spec §3.10): reconnect behaviour when a paired phone returns —
+    /// "ask" | "always" | "never". "" = not chosen yet; the UI derives it from
+    /// AllowPairedAutoReconnect (true→"always", false→"never") and keeps both in sync
+    /// ("always" is the only mode the engine's global gate can honour today).</summary>
+    public string ReconnectMode { get; set; } = "";
+    /// <summary>Desktop UI: background update check on startup (Settings → 更新 group).</summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+    /// <summary>Desktop UI: notify when a phone returns and asks to reconnect (Settings → 通知 group).</summary>
+    public bool ReturnAskNotify { get; set; } = true;
+    /// <summary>Desktop UI: phone playback volume shown on the speaker channel card (0–100).
+    /// Persisted UI state; the wire protocol has no volume packet yet (see checklist).</summary>
+    public int PhoneVolumePercent { get; set; } = 70;
 
     public static string FilePath => Path.Combine(AppConfig.DirPath, "settings.json");
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
@@ -283,7 +295,7 @@ public static class DeviceScoring
     {
         string n = name.ToLowerInvariant();
         int score = 0;
-        if (n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins
+        if (n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (new + legacy brand names)
         if (n.Contains("cable input")) score = Math.Max(score, 100);
         if (n.Contains("blackhole")) score = Math.Max(score, 95);
         if (n.Contains("vb-audio") || n.Contains("vb-cable") || n.Contains("cable")) score = Math.Max(score, 85);
@@ -296,7 +308,7 @@ public static class DeviceScoring
     {
         string n = name.ToLowerInvariant();
         int score = 0;
-        if (n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins
+        if (n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (new + legacy brand names)
         if (n.Contains("cable output")) score = Math.Max(score, 100);
         if (n.Contains("phoneaudiobridge") || n.Contains("phone-speaker") || n.Contains("phone_speaker")) score = Math.Max(score, 100);
         if (n.Contains("monitor")) score = Math.Max(score, 95);

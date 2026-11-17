@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>声桥 AirBridge — 桌面端 UI 原型</title>
+<title>声音接力 SoundRelay — 桌面端 UI 原型</title>
 <style>
 :root{
   --bg:#0B0E13; --bgTop:#0E131A; --surface:#151B24; --surfaceHi:#1C2531; --surfaceIn:#0F141C;
@@ -221,7 +221,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
   <!-- title bar -->
   <div class="titlebar">
     <div class="tlogo"><i style="height:6px"></i><i style="height:11px"></i><i style="height:8px"></i></div>
-    <div class="tt"><b>声桥 AirBridge</b>　·　GRAY-PC</div>
+    <div class="tt"><b>声音接力 SoundRelay</b>　·　GRAY-PC</div>
     <div class="wctl">
       <button title="最小化"><svg width="11" height="11" viewBox="0 0 11 11"><path d="M0 5.5h11" stroke="currentColor" stroke-width="1.1"/></svg></button>
       <button title="最大化"><svg width="11" height="11" viewBox="0 0 11 11"><rect x="1" y="1" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>
@@ -234,7 +234,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
     <aside class="side">
       <div class="brand">
         <div class="logo"><i style="height:10px"></i><i style="height:19px"></i><i style="height:26px"></i><i style="height:15px"></i><i style="height:9px"></i></div>
-        <div><div class="bname">声桥</div><div class="bsub">AIRBRIDGE</div></div>
+        <div><div class="bname">声音接力</div><div class="bsub">SOUNDRELAY</div></div>
       </div>
       <nav class="nav">
         <a class="on" data-nav="stream"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 5h3"/></svg>设备</a>
@@ -279,7 +279,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
                 <span class="pname">Xiaomi 13</span>
                 <span class="latbadge"><span class="n" id="latNum">18</span><span class="u">ms · 流畅</span></span>
               </div>
-              <div class="psub">192.168.1.42 · Android 14 · 声桥 App v2.1.0</div>
+              <div class="psub">192.168.1.42 · Android 14 · 声音接力 App v2.1.0</div>
               <div class="chips">
                 <span class="chip">连接 <b>WiFi</b></span>
                 <span class="chip"><b>48</b> kHz</span>
@@ -319,9 +319,9 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
               <div class="picker">
                 <div class="pk">输出到电脑的设备（软件在这里选手机麦克风）</div>
                 <div class="select">
-                  <button data-menu="mOut">扬声器 / 麦克风（声桥 AirBridge 虚拟音频设备）<span class="ok">声桥设备</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#9AA7B8" stroke-width="1.5" fill="none"/></svg></button>
+                  <button data-menu="mOut">扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备）<span class="ok">声音接力设备</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#9AA7B8" stroke-width="1.5" fill="none"/></svg></button>
                   <div class="menu" id="mOut">
-                    <div class="sel">麦克风（声桥 AirBridge 虚拟音频设备）<span class="tag">推荐</span></div>
+                    <div class="sel">麦克风（声音接力 SoundRelay 虚拟音频设备）<span class="tag">推荐</span></div>
                     <div>CABLE Output（VB-Audio Virtual Cable）<span class="tag">备用</span></div>
                     <div>麦克风（Realtek High Definition Audio）</div>
                   </div>
@@ -342,9 +342,9 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
               <div class="picker">
                 <div class="pk">采集电脑上的哪个声音送到手机</div>
                 <div class="select">
-                  <button data-menu="mIn">扬声器（声桥 AirBridge 虚拟音频设备）<span class="ok sky">声桥设备</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#9AA7B8" stroke-width="1.5" fill="none"/></svg></button>
+                  <button data-menu="mIn">扬声器（声音接力 SoundRelay 虚拟音频设备）<span class="ok sky">声音接力设备</span><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#9AA7B8" stroke-width="1.5" fill="none"/></svg></button>
                   <div class="menu" id="mIn">
-                    <div class="sel">扬声器（声桥 AirBridge 虚拟音频设备）<span class="tag">推荐</span></div>
+                    <div class="sel">扬声器（声音接力 SoundRelay 虚拟音频设备）<span class="tag">推荐</span></div>
                     <div>CABLE Input（VB-Audio Virtual Cable）<span class="tag">备用</span></div>
                     <div>扬声器（Realtek High Definition Audio）</div>
                     <div>系统默认输出</div>
@@ -463,7 +463,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
               </div>
             </div>
             <div class="setrow">
-              <div class="st1"><div class="t">声桥虚拟音频设备</div><div class="d">已安装 · 扬声器 / 麦克风（声桥 AirBridge 虚拟音频设备），其他软件可直接选用</div></div>
+              <div class="st1"><div class="t">声音接力虚拟音频设备</div><div class="d">已安装 · 扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备），其他软件可直接选用</div></div>
               <span class="pill g">正常工作</span>
             </div>
           </div>
@@ -496,7 +496,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
               <button class="sw sm on" aria-label="回归询问通知"></button>
             </div>
           </div>
-          <div class="foot-note">声桥 AirBridge v2.1.0 · 设置保存在本机，不上传任何数据</div>
+          <div class="foot-note">声音接力 SoundRelay v2.1.0 · 设置保存在本机，不上传任何数据</div>
         </div>
       </section>
     </div>
@@ -512,12 +512,12 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
       <div class="clog">
         <b>本次更新</b><br>
         · 桌面端界面全新改版：侧边栏布局、设备页与设置页重做<br>
-        · 新增声桥虚拟音频设备组件，安装时可一并装好<br>
+        · 新增声音接力虚拟音频设备组件，安装时可一并装好<br>
         · Mesh WiFi 切换后自动跟随新地址重连，不再连不上<br>
         · 修复在线更新检测不到新版本的问题
       </div>
       <div class="prog" id="progBox" style="display:none">
-        <div class="pl"><span id="progTxt">正在下载 AirBridge-Setup-v2.2.0.exe…</span><span class="pp" id="progPct">0%</span></div>
+        <div class="pl"><span id="progTxt">正在下载 SoundRelay-Setup-v2.2.0.exe…</span><span class="pp" id="progPct">0%</span></div>
         <div class="pbar"><i id="progFill"></i></div>
       </div>
       <div class="mfoot">
@@ -534,7 +534,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
     <div class="tray">
       <div class="th">
         <span class="pulse" style="width:7px;height:7px"></span>
-        <div><div class="tn">声桥 AirBridge</div><div class="ts">推流中 · Xiaomi 13 · 18 ms</div></div>
+        <div><div class="tn">声音接力 SoundRelay</div><div class="ts">推流中 · Xiaomi 13 · 18 ms</div></div>
       </div>
       <a>打开主窗口</a>
       <a>暂停推流</a>
@@ -545,7 +545,7 @@ body{background:#05070A;font-family:"Microsoft YaHei UI","Segoe UI","Noto Sans S
       <a>断开 Xiaomi 13</a>
       <a>设置…</a>
       <div class="tsep"></div>
-      <a>退出声桥</a>
+      <a>退出声音接力</a>
     </div>
   </div>
 </div>

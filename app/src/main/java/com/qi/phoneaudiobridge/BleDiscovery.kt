@@ -11,7 +11,7 @@ import android.os.ParcelUuid
 import android.util.Log
 
 /**
- * BLE proximity discovery (v2): scans for the canonical AirBridge service
+ * BLE proximity discovery (v2): scans for the canonical SoundRelay service
  * UUID (Protocol.BLE_SERVICE_UUID). Sightings are used ONLY for presence /
  * proximity (RSSI) in the nearby-device list — audio always stays on WiFi.
  *
@@ -28,7 +28,7 @@ class BleDiscovery(
     private val context: Context,
     private val onSighting: (deviceIdHint: String?, address: String, rssi: Int) -> Unit
 ) {
-    @Volatile var statusText: String = "BLE 未启动"
+    @Volatile var statusText: String = context.getString(R.string.ble_status_not_started)
         private set
     @Volatile var scanning: Boolean = false
         private set
@@ -50,11 +50,11 @@ class BleDiscovery(
         if (scanning) return
         val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val adapter = bm?.adapter
-        if (adapter == null) { statusText = "这台手机不支持蓝牙"; return }
-        if (!adapter.isEnabled) { statusText = "蓝牙未开启，附近发现仅用局域网"; return }
-        if (!hasPermission()) { statusText = "需要附近设备权限才能用蓝牙发现"; return }
+        if (adapter == null) { statusText = context.getString(R.string.ble_unsupported); return }
+        if (!adapter.isEnabled) { statusText = context.getString(R.string.ble_off); return }
+        if (!hasPermission()) { statusText = context.getString(R.string.ble_need_permission); return }
         val scanner = adapter.bluetoothLeScanner
-        if (scanner == null) { statusText = "蓝牙扫描不可用"; return }
+        if (scanner == null) { statusText = context.getString(R.string.ble_scanner_unavailable); return }
         val filter = ScanFilter.Builder()
             .setServiceUuid(ParcelUuid.fromString(Protocol.BLE_SERVICE_UUID))
             .build()
@@ -69,7 +69,7 @@ class BleDiscovery(
                 for (r in results) handle(r)
             }
             override fun onScanFailed(errorCode: Int) {
-                statusText = "蓝牙扫描失败（$errorCode），仅用局域网发现"
+                statusText = context.getString(R.string.ble_scan_failed, errorCode)
                 scanning = false
                 Log.w("BleDiscovery", "scan failed: $errorCode")
             }
@@ -78,9 +78,9 @@ class BleDiscovery(
         try {
             scanner.startScan(listOf(filter), settings, cb)
             scanning = true
-            statusText = "蓝牙发现已开启"
+            statusText = context.getString(R.string.ble_on)
         } catch (e: Exception) {
-            statusText = "蓝牙扫描启动失败，仅用局域网发现"
+            statusText = context.getString(R.string.ble_start_failed)
             Log.w("BleDiscovery", "startScan failed: ${e.message}")
         }
     }
@@ -109,6 +109,6 @@ class BleDiscovery(
         } catch (_: Exception) {}
         scanning = false
         callback = null
-        statusText = "BLE 已停止"
+        statusText = context.getString(R.string.ble_stopped)
     }
 }

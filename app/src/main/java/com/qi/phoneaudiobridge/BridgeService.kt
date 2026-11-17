@@ -22,10 +22,11 @@ class BridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AudioEngine.attachContext(applicationContext)
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
             nm?.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "手机音频桥", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_LOW)
             )
         }
     }
@@ -83,20 +84,20 @@ class BridgeService : Service() {
         )
         val paused = AudioEngine.userPaused
         val b = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle(if (paused) "声桥 AirBridge 已暂停" else "声桥 AirBridge 运行中")
+            .setContentTitle(if (paused) getString(R.string.notif_title_paused) else getString(R.string.notif_title_running))
             .setContentText(
-                if (paused) "已暂停：点「继续」恢复自动连接"
-                else "手机麦克风 → 电脑 · 电脑声音 → 手机"
+                if (paused) getString(R.string.notif_text_paused)
+                else getString(R.string.notif_text_running)
             )
             .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
             .setContentIntent(openIntent)
             .setOngoing(true)
         if (paused) {
-            b.addAction(Notification.Action.Builder(null, "继续", actionIntent(ACTION_RESUME, 12)).build())
+            b.addAction(Notification.Action.Builder(null, getString(R.string.notif_action_resume), actionIntent(ACTION_RESUME, 12)).build())
         } else {
-            b.addAction(Notification.Action.Builder(null, "暂停", actionIntent(ACTION_PAUSE, 11)).build())
+            b.addAction(Notification.Action.Builder(null, getString(R.string.notif_action_pause), actionIntent(ACTION_PAUSE, 11)).build())
         }
-        b.addAction(Notification.Action.Builder(null, "断开", actionIntent(ACTION_DISCONNECT, 13)).build())
+        b.addAction(Notification.Action.Builder(null, getString(R.string.notif_action_disconnect), actionIntent(ACTION_DISCONNECT, 13)).build())
         return b.build()
     }
 

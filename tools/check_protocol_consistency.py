@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-source protocol consistency checker for AirBridge.
+Cross-source protocol consistency checker for SoundRelay.
 
 Extracts constants / formats / JSON keys from BOTH source trees (Android
 Kotlin + PC Python), PROTOCOL.md, and (when present) windows-native C#,
@@ -174,7 +174,7 @@ def main():
     # ---- online-update canonical address ----
     m = re.search(r'DEFAULT_UPDATE_MANIFEST_URL\s*=\s*"([^"]+)"', update_kt)
     upd = m.group(1) if m else None
-    if upd != "https://muse.ai/s/airbridge-update/update.json":
+    if upd != "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json":
         fail(f"update manifest URL drift in UpdateChecker.kt: {upd!r}")
     elif upd not in protocol_md:
         fail("update manifest URL missing from PROTOCOL.md")
@@ -255,7 +255,7 @@ def main():
         ok("AudioEngine live path wired: echoProcessor.processCapture/pushPlayback + loopGuard.checkIncoming/pushSentMic")
     else:
         fail(f"AudioEngine live-path wiring incomplete: {wiring}")
-    for side, fname in [("android", "PhoneAudioBridge-v2.1-debug.apk"), ("windows", "AirBridge-Setup-v2.1.exe")]:
+    for side, fname in [("android", "PhoneAudioBridge-v2.2-debug.apk"), ("windows", "SoundRelay-Setup-v2.2.exe")]:
         fpath = os.path.join(ROOT, "releases", fname)
         entry = rel_manifest.get(side, {})
         if not os.path.exists(fpath):

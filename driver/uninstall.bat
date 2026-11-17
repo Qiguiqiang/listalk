@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 rem ============================================================================
-rem  AirBridge Virtual Audio Driver - UNINSTALL (Route A)
+rem  SoundRelay Virtual Audio Driver - UNINSTALL (Route A)
 rem  MUST be run as Administrator.
 rem  Removes the device + driver package. Optionally also removes the test
 rem  certificate and turns Test Mode back OFF (you will be asked).
@@ -17,7 +17,7 @@ if errorlevel 1 (
 
 set "HWID=ROOT\SimpleAudioSample"
 
-echo === AirBridge virtual audio driver uninstall ===
+echo === SoundRelay virtual audio driver uninstall ===
 echo.
 echo [1/3] Removing device node ...
 set "DEVCON="
@@ -31,14 +31,14 @@ if defined DEVCON (
   "%DEVCON%" remove "%HWID%"
 ) else (
   echo devcon not found - remove the device in Device Manager instead:
-  echo   Sound, video and game controllers ^> AirBridge device ^> Uninstall device.
+  echo   Sound, video and game controllers ^> SoundRelay device ^> Uninstall device.
 )
 
 echo [2/3] Removing driver package from the driver store ...
 powershell -NoProfile -Command "$lines = pnputil /enum-drivers; $oem = $null; foreach ($l in $lines) { if ($l -match 'Published Name:\s*(oem\d+\.inf)') { $oem = $Matches[1] } elseif ($l -match 'Original Name:\s*SimpleAudioSample\.inf' -and $oem) { Write-Host ('Deleting ' + $oem); pnputil /delete-driver $oem /uninstall; $oem = $null } }"
 echo.
 echo [3/3] Optional cleanup ...
-choice /c YN /m "Also remove the AirBridge TEST certificate from Root/TrustedPublisher stores"
+choice /c YN /m "Also remove the SoundRelay TEST certificate from Root/TrustedPublisher stores"
 if not errorlevel 2 (
   certutil -delstore Root "AirBridge Test Driver Signing" >nul 2>&1
   certutil -delstore TrustedPublisher "AirBridge Test Driver Signing" >nul 2>&1

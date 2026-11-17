@@ -7,7 +7,7 @@ using Windows.Storage.Streams;
 namespace AirBridge;
 
 /// <summary>
-/// Canonical BLE service UUID for AirBridge presence — fixed by the Android side in
+/// Canonical BLE service UUID for SoundRelay presence — fixed by the Android side in
 /// Protocol.kt (BLE_SERVICE_UUID, first 128 bits of SHA-256("AirBridge-BLE-Service-v2"))
 /// and adopted verbatim here so both ends interoperate.
 /// BLE-UUID: 9072f6d1-ec44-0c52-ad20-dc70f9bc5a38
@@ -32,7 +32,7 @@ public sealed class MdnsDiscovery : IDisposable
     private MulticastService? _mdns;
     private ServiceDiscovery? _sd;
     private CancellationTokenSource? _queryCts;
-    public string Status { get; private set; } = "未启动";
+    public string Status { get; private set; } = Loc.Tr("未启动");
     public event Action<string>? Log;
 
     public MdnsDiscovery(BridgeEngine engine) => _engine = engine;
@@ -44,7 +44,7 @@ public sealed class MdnsDiscovery : IDisposable
             _mdns = new MulticastService();
             _sd = new ServiceDiscovery(_mdns);
             var profile = new ServiceProfile(
-                $"AirBridge-{_engine.Config.DeviceId}", BleIdentity.MdnsServiceType, Protocol.Port);
+                $"SoundRelay-{_engine.Config.DeviceId}", BleIdentity.MdnsServiceType, Protocol.Port);
             profile.AddProperty("deviceId", _engine.Config.DeviceId);
             profile.AddProperty("name", Environment.MachineName);
             profile.AddProperty("os", "Windows");
@@ -129,7 +129,7 @@ public sealed class MdnsDiscovery : IDisposable
 
 /// <summary>
 /// BLE advertisement transport (WinRT Windows.Devices.Bluetooth.Advertisement).
-/// Advertises the canonical AirBridge service UUID plus manufacturer data:
+/// Advertises the canonical SoundRelay service UUID plus manufacturer data:
 ///   CompanyId 0xFFFF (test), payload layout:
 ///     bytes 0-1 : 'A','B' magic (0x41 0x42)
 ///     byte  2   : version 0x01
@@ -142,13 +142,13 @@ public sealed class MdnsDiscovery : IDisposable
 public sealed class BleAdvertiser
 {
     private BluetoothLEAdvertisementPublisher? _publisher;
-    public string Status { get; private set; } = "未启动";
+    public string Status { get; private set; } = Loc.Tr("未启动");
     public event Action<string>? Log;
 
     public void Start(AppConfig config)
     {
         if (!OperatingSystem.IsWindows())
-        { Status = "非 Windows，跳过"; return; }
+        { Status = Loc.Tr("非 Windows，跳过"); return; }
         try
         {
             _publisher = new BluetoothLEAdvertisementPublisher();

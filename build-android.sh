@@ -58,5 +58,5 @@ if [ ! -f build-manual/debug.keystore ]; then
 fi
 "$BT/apksigner" sign --ks build-manual/debug.keystore \
     --ks-pass pass:android --key-pass pass:android \
-    --out PhoneAudioBridge-v2.1-debug.apk "$WORK/aligned.apk"
-echo "DONE: PhoneAudioBridge-v2.1-debug.apk"
+    --out PhoneAudioBridge-v2.2-debug.apk "$WORK/aligned.apk"
+echo "DONE: PhoneAudioBridge-v2.2-debug.apk"

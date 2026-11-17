@@ -1,6 +1,7 @@
 import com.qi.phoneaudiobridge.EchoCanceller
 import com.qi.phoneaudiobridge.EchoProcessor
 import com.qi.phoneaudiobridge.LoopGuard
+import com.qi.phoneaudiobridge.PlayoutWatchdog
 import com.qi.phoneaudiobridge.Protocol
 import java.security.MessageDigest
 import kotlin.math.log10
@@ -316,5 +317,104 @@ fun main() {
     // A ~100 Hz cascade corner inherently costs ~1 dB at 200 Hz (measured
     // -1.07 dB): perceptually negligible for voice, documented in the report.
     check(voiceDb > -1.5) { "HPF hurt voice band: $voiceDb dB" }
+
+    // ---- LOOP GUARD FUSE test (v2.2): a true loop running for 12 s must
+    // NOT mute playback the whole time — the hard cap force-releases and
+    // cools down, so even a permanently-looping PC leaves audible gaps.
+    // (The guard is a safety net, never a permanent mute.) ----
+    val guard3 = LoopGuard()
+    var lgLateBlocked = 0
+    for (f in 0 until 1200) {
+        val sent = ShortArray(frame) { speech[(f % frames) * frame + it].toInt().toShort() }
+        guard3.pushSentMic(sent)
+        val incoming = if (f >= 35) ShortArray(frame) { (speech[((f - 35) % frames) * frame + it] * 0.8).toInt().toShort() }
+            else ShortArray(frame)
+        val dropped = guard3.checkIncoming(incoming)
+        if (f >= 900 && dropped) lgLateBlocked++
+    }
+    println("JVM loopguard-fuse: blocked in final 300 frames=$lgLateBlocked/300 cappedReleases=${guard3.cappedReleaseCount} detections=${guard3.detectionCount}")
+    check(guard3.detectionCount >= 1) { "fuse test never detected the loop" }
+    check(guard3.cappedReleaseCount >= 1) { "loop guard fuse never fired over 12 s of loop" }
+    check(lgLateBlocked < 300) { "loop guard muted playback permanently: $lgLateBlocked/300 late frames blocked" }
+
+    // ---- LOOP GUARD ACOUSTIC test (v2.2): the PC plays strongly periodic
+    // programme material; the phone mic hears it only ACOUSTICALLY, and
+    // what reaches pushSentMic is the post-echo-chain residual (echo
+    // ~26 dB down) plus independent room noise. There is NO electric
+    // loop, so nothing may be blocked. ----
+    val guard4 = LoopGuard()
+    val acGen = Lcg(0x5EED1234L)
+    var acSm = 0.0
+    fun progAt(p: Int): Double {
+        val t = p / rate.toDouble()
+        return (kotlin.math.sin(2.0 * Math.PI * 196.0 * t) +
+            0.7 * kotlin.math.sin(2.0 * Math.PI * 262.0 * t) +
+            0.5 * kotlin.math.sin(2.0 * Math.PI * 392.0 * t)) / 2.2 * 16000.0
+    }
+    var lgAcBlocked = 0
+    for (f in 0 until 600) {
+        val micFrame = ShortArray(frame) { i ->
+            val p = f * frame + i
+            acSm = acSm * 0.8 + acGen.next() * 0.2
+            (progAt(p - 12 * frame) * 0.05 + acSm * 2600.0).coerceIn(-32768.0, 32767.0).toInt().toShort()
+        }
+        guard4.pushSentMic(micFrame)
+        val incoming = ShortArray(frame) { progAt(f * frame + it).toInt().toShort() }
+        if (f >= 100 && guard4.checkIncoming(incoming)) lgAcBlocked++
+    }
+    println("JVM loopguard-acoustic: blocked $lgAcBlocked/500 frames (detections=${guard4.detectionCount}, lastCorr=${"%.2f".format(guard4.lastCorrelation)})")
+    check(lgAcBlocked == 0) { "loop guard blocked acoustic-only programme material: $lgAcBlocked frames" }
+
+    // ---- PLAYOUT WATCHDOG tests (v2.2 speaker-no-sound fix): the head
+    // position is the only trustworthy liveness signal of an AudioTrack.
+    // (a) healthy: head tracks writes -> never stalls.
+    // (b) dead track: head frozen while writes continue -> exactly one
+    //     stall report per episode.
+    // (c) 32-bit head wraparound must not look like a stall.
+    // (d) grace period: no verdict in the first GRACE_MS after start. ----
+    val wd = PlayoutWatchdog()
+    wd.onTrackStarted(0)
+    var wdStall = false
+    var simWritten = 0L
+    for (tMs in 0..5000 step 10) {
+        wd.onWrite(480); simWritten += 480
+        if (tMs % 250 == 0) {
+            val head = (simWritten - 960).toInt()
+            if (wd.onHeadSample(head, tMs.toLong())) wdStall = true
+        }
+    }
+    check(!wdStall && wd.stallCount == 0) { "watchdog fired on a healthy track" }
+    // (b) head freezes at its current value; writes continue
+    var wdReports = 0
+    val frozenHead = (simWritten - 960).toInt()
+    for (tMs in 5010..10000 step 10) {
+        wd.onWrite(480)
+        if (tMs % 250 == 0 && wd.onHeadSample(frozenHead, tMs.toLong())) wdReports++
+    }
+    println("JVM watchdog: healthyStall=$wdStall deadTrackReports=$wdReports stallCount=${wd.stallCount}")
+    check(wdReports == 1 && wd.stallCount == 1) { "watchdog should report a dead track exactly once, got $wdReports" }
+    // (c) wraparound: head starts just below 2^32 and advances across it
+    val wd2 = PlayoutWatchdog()
+    wd2.onTrackStarted(0)
+    var wd2Stall = false
+    var headRaw = -4800 // 0xFFFFED40 as a signed Int
+    for (tMs in 0..5000 step 10) {
+        wd2.onWrite(480)
+        if (tMs % 250 == 0) {
+            if (wd2.onHeadSample(headRaw, tMs.toLong())) wd2Stall = true
+            headRaw += 480 * 25 // advance 250 ms worth, crossing the wrap
+        }
+    }
+    check(!wd2Stall) { "watchdog mistook head wraparound for a stall" }
+    // (d) grace: frozen head, but too early to judge
+    val wd3 = PlayoutWatchdog()
+    wd3.onTrackStarted(0)
+    var wd3Early = false
+    for (tMs in 0..1000 step 10) {
+        wd3.onWrite(480)
+        if (tMs % 250 == 0 && wd3.onHeadSample(0, tMs.toLong())) wd3Early = true
+    }
+    check(!wd3Early) { "watchdog fired inside the grace period" }
+    println("JVM watchdog: wraparoundOK=true graceOK=true")
     println("JVM ALL OK")
 }

@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 rem ============================================================================
-rem  AirBridge Virtual Audio Driver - INSTALL (Route A, TEST ONLY)
+rem  SoundRelay Virtual Audio Driver - INSTALL (Route A, TEST ONLY)
 rem  MUST be run as Administrator.
 rem  Pass 1 (test signing off): imports the test certificate, turns Test Mode
 rem          ON, then tells you to REBOOT and run install.bat again.
@@ -21,7 +21,7 @@ set "CER=%~dp0cert\driver-test-cert.cer"
 set "PKG=%~dp0build-output"
 set "HWID=ROOT\SimpleAudioSample"
 
-echo === AirBridge virtual audio driver install (TEST-SIGNED, self-use only) ===
+echo === SoundRelay virtual audio driver install (TEST-SIGNED, self-use only) ===
 echo.
 
 rem --- Secure Boot check (Test Mode cannot take effect with Secure Boot ON) ---
@@ -103,10 +103,10 @@ echo --- Device status ---
 "%DEVCON%" status "%HWID%"
 echo.
 echo Done. Check Settings ^> Sound - you should now see:
-echo     Output: Speakers (AirBridge virtual audio device, shown in Chinese as
+echo     Output: Speakers (SoundRelay virtual audio device, shown in Chinese as
 echo             the speaker endpoint of the branded device)
 echo     Input : Microphone (same branded device)
 echo Device Manager should list the adapter under "Sound, video and game
-echo controllers" with the AirBridge branded name.
+echo controllers" with the SoundRelay branded name.
 pause
 exit /b 0

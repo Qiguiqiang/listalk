@@ -799,7 +799,7 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=PORT, help="UDP 端口（默认 47731）")
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="配置文件路径")
     ap.add_argument("--save-config", action="store_true", help="把本次设备选择写入配置文件")
-    ap.add_argument("--gui", action="store_true", help="打开 tkinter 状态窗（声桥 AirBridge 桌面界面）")
+    ap.add_argument("--gui", action="store_true", help="打开 tkinter 状态窗（声音接力 SoundRelay 桌面界面）")
     args = ap.parse_args(argv)
 
     try:
@@ -880,7 +880,7 @@ def print_pairing_info(bridge, cfg):
     payload = pairing_payload(bridge.device_id, socket.gethostname(), platform.system(),
                                local_ip(), bridge.port, bridge.token)
     print("=" * 60)
-    print(" 声桥 AirBridge — 配对信息")
+    print(" 声音接力 SoundRelay — 配对信息")
     print(f" 配对码（10 分钟内有效）: {code}")
     print(f" 二维码内容（手机扫码用）: {payload}")
     try:
@@ -891,7 +891,7 @@ def print_pairing_info(bridge, cfg):
         qr.print_ascii(invert=True)
     except ImportError:
         print(" （装了 qrcode 库后这里会直接打印二维码：pip install qrcode）")
-    print(" 已配对的手机打开声桥会自动连接，无需再配对。")
+    print(" 已配对的手机打开声音接力会自动连接，无需再配对。")
     print("=" * 60)
 
 
@@ -924,7 +924,7 @@ def run_gui(bridge, cfg, config_path, pair_code_fn):
         FONT_MONO = ("Monospace", 10)
 
     root = tk.Tk()
-    root.title("声桥 AirBridge")
+    root.title("声音接力 SoundRelay")
     root.geometry("520x760")
     root.resizable(False, False)
     root.configure(bg=BG)
@@ -938,14 +938,14 @@ def run_gui(bridge, cfg, config_path, pair_code_fn):
     status_var = tk.StringVar(value="● 未启动")
     tk.Label(hdr, textvariable=status_var, bg=BG, fg=TEXT2, font=FONT_B).pack(side="left")
     tk.Label(hdr, text=f"端口 {bridge.port}", bg=SURFACE_IN, fg=TEXT2, font=FONT).pack(side="right")
-    tk.Label(root, text="声桥 AirBridge · 把电脑变成手机的外接声卡",
+    tk.Label(root, text="声音接力 SoundRelay · 把电脑变成手机的外接声卡",
              bg=BG, fg=TEXT2, font=FONT).pack(anchor="w", padx=16)
 
     # hero
     hero = card(root); hero.pack(fill="x", padx=16, pady=10)
     hero_title = tk.Label(hero, text="等待手机连接", bg=SURFACE, fg=TEXT1, font=FONT_H)
     hero_title.pack(anchor="w", padx=14, pady=(12, 0))
-    hero_sub = tk.Label(hero, text="在手机上打开声桥，点「开始搜索」即可自动找到这台电脑",
+    hero_sub = tk.Label(hero, text="在手机上打开声音接力，点「开始搜索」即可自动找到这台电脑",
                         bg=SURFACE, fg=TEXT2, font=FONT, wraplength=470, justify="left")
     hero_sub.pack(anchor="w", padx=14)
     badge_var = tk.StringVar(value="-- ms")
@@ -1107,7 +1107,7 @@ def run_gui(bridge, cfg, config_path, pair_code_fn):
                 ips = sorted(set(x for x in ips if not x.startswith("127.")))
             except OSError:
                 pass
-            hero_sub.config(text="在手机上打开声桥，点「开始搜索」即可自动找到这台电脑" +
+            hero_sub.config(text="在手机上打开声音接力，点「开始搜索」即可自动找到这台电脑" +
                                  (f"\n本机 IP：{'、'.join(ips)}" if ips else ""))
             badge_var.set("-- ms"); badge.config(fg=TEXT2)
         else:

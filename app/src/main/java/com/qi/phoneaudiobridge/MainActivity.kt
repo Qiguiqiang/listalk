@@ -37,7 +37,7 @@ import kotlin.math.log10
 import kotlin.math.roundToInt
 
 /**
- * 声桥 AirBridge — multi-PC home (UI_SPEC.md + UI_SPEC_MULTIDEVICE.md):
+ * 声音接力 SoundRelay — multi-PC home (UI_SPEC.md + UI_SPEC_MULTIDEVICE.md):
  * overview hero, one card per PC (three states, per-device toggles,
  * auto-connect switch that stays live on offline cards), unpaired rows,
  * add-a-PC card, and the pairing overlays (QR scan / 6-digit code /
@@ -134,6 +134,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AudioEngine.attachContext(applicationContext)
         setContentView(R.layout.activity_main)
         bindViews()
         buildMeter(meterMic, micSegs)
@@ -155,9 +156,19 @@ class MainActivity : Activity() {
             ?: UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL
 
     private fun wireUpdateUi() {
+        // Inject localized templates into the (resource-free) update
+        // checker: it must also run on the JVM harness, so it cannot read
+        // R.string itself. Locale comes from values / values-en.
+        UpdateChecker.strings = UpdateChecker.Strings(
+            summaryFailed = { getString(R.string.update_summary_failed, it) },
+            summaryNone = getString(R.string.update_summary_none),
+            errorHttp = { getString(R.string.update_error_http, it) },
+            errorInvalidManifest = getString(R.string.update_manifest_invalid),
+            errorNetwork = { getString(R.string.update_error_network, it) }
+        )
         val et = findViewById<EditText>(R.id.etUpdateUrl)
         et.setText(updateManifestUrl())
-        findViewById<TextView>(R.id.tvUpdateInfo).text = "当前版本 ${UpdateChecker.APP_VERSION}"
+        findViewById<TextView>(R.id.tvUpdateInfo).text = getString(R.string.update_current_version, UpdateChecker.APP_VERSION)
         findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener {
             val url = et.text.toString().trim()
             if (url.isNotEmpty()) updatePrefs().edit().putString("update_url", url).apply()
@@ -173,7 +184,7 @@ class MainActivity : Activity() {
         // 已是最新版本 / 发现新版本 / 检查失败：<plain reason>, with the
         // fetch diagnostics (URL + HTTP status + manifest versions)
         // kept as the card's second line.
-        if (manual) tvInfo.text = "正在检查更新…（当前版本 ${UpdateChecker.APP_VERSION}）"
+        if (manual) tvInfo.text = getString(R.string.update_checking, UpdateChecker.APP_VERSION)
         Thread {
             val report = UpdateChecker.fetchManifestReport(url)
             if (report.partnerVersion != null) {
@@ -183,24 +194,24 @@ class MainActivity : Activity() {
                 val info = report.info
                 when {
                     report.error != null || info == null -> {
-                        val reason = report.error ?: "更新清单无效（内容无法解析）"
-                        tvInfo.text = "检查失败：$reason\n${report.summary}"
-                        if (manual) Toast.makeText(this, "检查更新失败：$reason", Toast.LENGTH_LONG).show()
+                        val reason = report.error ?: getString(R.string.update_manifest_invalid)
+                        tvInfo.text = getString(R.string.update_check_failed_card, reason) + "\n" + report.summary
+                        if (manual) Toast.makeText(this, getString(R.string.update_check_failed_toast, reason), Toast.LENGTH_LONG).show()
                     }
                     UpdateChecker.isNewer(info.version) -> {
-                        tvInfo.text = "发现新版本 ${info.version}（当前 ${UpdateChecker.APP_VERSION}）\n${report.summary}"
+                        tvInfo.text = getString(R.string.update_found_card, info.version, UpdateChecker.APP_VERSION) + "\n" + report.summary
                         AlertDialog.Builder(this)
-                            .setTitle("发现新版本 ${info.version}")
-                            .setMessage(info.notes.ifEmpty { "有新版本可用。" })
-                            .setPositiveButton("下载并安装") { _, _ -> downloadUpdate(info) }
-                            .setNegativeButton("以后再说", null)
+                            .setTitle(getString(R.string.update_found_title, info.version))
+                            .setMessage(info.notes.ifEmpty { getString(R.string.update_found_default_notes) })
+                            .setPositiveButton(getString(R.string.update_download_install)) { _, _ -> downloadUpdate(info) }
+                            .setNegativeButton(getString(R.string.action_later), null)
                             .show()
                     }
                     else -> {
-                        tvInfo.text = "已是最新版本 · 当前 ${UpdateChecker.APP_VERSION} · 服务器 ${info.version}" +
-                            (report.partnerVersion?.let { " · 电脑端最新 v$it" } ?: "") +
-                            "\n${report.summary}"
-                        if (manual) Toast.makeText(this, "已是最新版（${UpdateChecker.APP_VERSION}）", Toast.LENGTH_SHORT).show()
+                        tvInfo.text = getString(R.string.update_uptodate_card, UpdateChecker.APP_VERSION, info.version) +
+                            (report.partnerVersion?.let { getString(R.string.update_uptodate_partner_suffix, it) } ?: "") +
+                            "\n" + report.summary
+                        if (manual) Toast.makeText(this, getString(R.string.update_uptodate_toast, UpdateChecker.APP_VERSION), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -209,8 +220,8 @@ class MainActivity : Activity() {
 
     private fun downloadUpdate(info: UpdateChecker.UpdateInfo) {
         val tvInfo = findViewById<TextView>(R.id.tvUpdateInfo)
-        tvInfo.text = "正在下载新版本 ${info.version}…"
-        Toast.makeText(this, "正在下载更新…", Toast.LENGTH_SHORT).show()
+        tvInfo.text = getString(R.string.update_downloading_card, info.version)
+        Toast.makeText(this, getString(R.string.update_downloading_toast), Toast.LENGTH_SHORT).show()
         Thread {
             val dest = File(cacheDir, "airbridge-update.apk")
             val okDownload = UpdateChecker.downloadTo(info.url, dest)
@@ -219,16 +230,16 @@ class MainActivity : Activity() {
             runOnUiThread {
                 when {
                     !okDownload -> {
-                        tvInfo.text = "下载新版本 ${info.version} 失败，请重试"
-                        Toast.makeText(this, "下载失败，请重试", Toast.LENGTH_LONG).show()
+                        tvInfo.text = getString(R.string.update_download_failed_card, info.version)
+                        Toast.makeText(this, getString(R.string.update_download_failed_toast), Toast.LENGTH_LONG).show()
                     }
                     !okVerify -> {
                         dest.delete()
-                        tvInfo.text = "更新包校验失败（SHA-256 不一致），已中止安装"
-                        Toast.makeText(this, "更新包校验失败（SHA-256 不一致），已中止安装", Toast.LENGTH_LONG).show()
+                        tvInfo.text = getString(R.string.update_verify_failed)
+                        Toast.makeText(this, getString(R.string.update_verify_failed), Toast.LENGTH_LONG).show()
                     }
                     else -> {
-                        tvInfo.text = "新版本 ${info.version} 下载完成并校验通过，正在打开安装器…"
+                        tvInfo.text = getString(R.string.update_downloaded_card, info.version)
                         installDownloaded(dest)
                     }
                 }
@@ -239,9 +250,9 @@ class MainActivity : Activity() {
     private fun installDownloaded(apk: File) {
         if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
             AlertDialog.Builder(this)
-                .setTitle("需要安装权限")
-                .setMessage("请在系统设置里允许声桥安装未知应用，然后回来重新检查更新。")
-                .setPositiveButton("去设置") { _, _ ->
+                .setTitle(getString(R.string.install_perm_title))
+                .setMessage(getString(R.string.install_perm_msg))
+                .setPositiveButton(getString(R.string.action_go_settings)) { _, _ ->
                     try {
                         startActivity(
                             Intent(
@@ -251,14 +262,14 @@ class MainActivity : Activity() {
                         )
                     } catch (_: Exception) {}
                 }
-                .setNegativeButton("取消", null)
+                .setNegativeButton(getString(R.string.action_cancel), null)
                 .show()
             return
         }
         try {
             startActivity(UpdateInstaller.installIntent(this, apk))
         } catch (e: Exception) {
-            Toast.makeText(this, "无法打开系统安装器：${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.installer_failed_toast, e.message.toString()), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -398,27 +409,27 @@ class MainActivity : Activity() {
     /** Manual IP = last-resort fallback under 「其他方式」 (v2.1 hierarchy). */
     private fun showManualIpDialog() {
         val et = EditText(this)
-        et.hint = "电脑 IP，如 192.168.1.20"
+        et.hint = getString(R.string.manual_ip_hint)
         et.inputType = android.text.InputType.TYPE_CLASS_TEXT
         et.setTextColor(text1)
         et.setHintTextColor(text3)
         AlertDialog.Builder(this)
-            .setTitle("手动输入电脑 IP")
-            .setMessage("这是最保底的方式：标准配对请用「配对新电脑」的附近列表。")
+            .setTitle(getString(R.string.manual_ip_title))
+            .setMessage(getString(R.string.manual_ip_msg))
             .setView(et)
-            .setPositiveButton("连接") { _, _ ->
+            .setPositiveButton(getString(R.string.action_connect)) { _, _ ->
                 val ip = et.text.toString().trim()
                 if (ip.isEmpty()) {
-                    Toast.makeText(this, "先输入电脑 IP", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.manual_ip_empty_toast), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 if (!AudioEngine.running) {
-                    Toast.makeText(this, "先点「开始搜索」，再连接电脑", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.manual_ip_need_search_toast), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 AudioEngine.connectManual(ip)
             }
-            .setNegativeButton("取消", null)
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
@@ -471,7 +482,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.POST_NOTIFICATIONS)
         if (needed.isNotEmpty()) {
             requestPermissions(needed.toTypedArray(), REQ_AUDIO)
-            Toast.makeText(this, "需要麦克风权限才能把声音送到电脑，授权后再点一次", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.mic_perm_toast), Toast.LENGTH_LONG).show()
             return false
         }
         return true
@@ -482,7 +493,7 @@ class MainActivity : Activity() {
         if (requestCode == REQ_CAMERA && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             if (overlayScan.visibility == View.VISIBLE) startScanner()
         } else if (requestCode == REQ_CAMERA) {
-            tvScanHint.text = "需要相机权限才能扫码——可以用下方「输入配对码」"
+            tvScanHint.text = getString(R.string.scan_need_camera_perm_short)
             tvScanHint.setTextColor(error)
         } else if (requestCode == REQ_BLE) {
             // nearby-devices permission decided: (re)start BLE scan either way
@@ -537,9 +548,9 @@ class MainActivity : Activity() {
         // header overview (§1: ● N 台推流中 / ● N 台在线 / ○ 暂无在线)
         val onlineCount = views.count { it.online }
         when {
-            conn.isNotEmpty() -> { tvStatus.text = "${conn.size} 台推流中"; tvStatus.setTextColor(accent); viewStatusDot.backgroundTintList = ColorStateList.valueOf(accent) }
-            onlineCount > 0 -> { tvStatus.text = "$onlineCount 台在线"; tvStatus.setTextColor(text2); viewStatusDot.backgroundTintList = ColorStateList.valueOf(accent) }
-            else -> { tvStatus.text = "暂无在线"; tvStatus.setTextColor(text3); viewStatusDot.backgroundTintList = ColorStateList.valueOf(text3) }
+            conn.isNotEmpty() -> { tvStatus.text = getString(R.string.header_streaming, conn.size); tvStatus.setTextColor(accent); viewStatusDot.backgroundTintList = ColorStateList.valueOf(accent) }
+            onlineCount > 0 -> { tvStatus.text = getString(R.string.header_online, onlineCount); tvStatus.setTextColor(text2); viewStatusDot.backgroundTintList = ColorStateList.valueOf(accent) }
+            else -> { tvStatus.text = getString(R.string.header_none_online); tvStatus.setTextColor(text3); viewStatusDot.backgroundTintList = ColorStateList.valueOf(text3) }
         }
 
         // unified versioning: NEVER fail silently on a version mismatch
@@ -548,10 +559,10 @@ class MainActivity : Activity() {
                 val key = "${v.deviceId ?: v.ip}@${v.pcAppVersion}"
                 if (shownVersionWarnings.add(key)) {
                     AlertDialog.Builder(this)
-                        .setTitle("版本不一致")
-                        .setMessage("版本不一致：电脑端为 v${v.pcAppVersion}，本机为 v${UpdateChecker.APP_VERSION}，请先更新电脑端")
-                        .setPositiveButton("去检查更新") { _, _ -> checkUpdate(manual = true) }
-                        .setNegativeButton("知道了", null)
+                        .setTitle(getString(R.string.version_mismatch_title))
+                        .setMessage(getString(R.string.version_mismatch_msg, v.pcAppVersion, UpdateChecker.APP_VERSION))
+                        .setPositiveButton(getString(R.string.action_check_update_now)) { _, _ -> checkUpdate(manual = true) }
+                        .setNegativeButton(getString(R.string.action_got_it), null)
                         .show()
                 }
             }
@@ -560,7 +571,7 @@ class MainActivity : Activity() {
         // reconnect banner (legacy single-purpose) — kept for drop events
         val reconnecting = e.running && conn.isEmpty() && e.reconnectCount > 0 && views.any { it.online }
         bannerReconnect.visibility = if (reconnecting) View.VISIBLE else View.GONE
-        if (reconnecting) bannerReconnect.text = "连接中断，正在重连…（第 ${e.reconnectCount} 次）· 网络恢复后会自动继续推流"
+        if (reconnecting) bannerReconnect.text = getString(R.string.reconnect_banner, e.reconnectCount)
 
         // auto-connect / pairing banner (§5): show each engine event once, 3 s
         if (e.lastAutoEventAtMs > lastShownAutoEventAt && e.lastAutoEventAtMs > 0) {
@@ -577,28 +588,28 @@ class MainActivity : Activity() {
         // hero / overview
         when {
             conn.isNotEmpty() -> {
-                tvHeroEyebrow.text = "● LIVE · 正在推流"
+                tvHeroEyebrow.text = getString(R.string.hero_live_eyebrow)
                 tvHeroEyebrow.setTextColor(accent)
-                tvHeroTitle.text = "已连接 ${conn.size} 台电脑"
-                tvHeroSub.text = conn.joinToString("、") { it.name }
+                tvHeroTitle.text = getString(R.string.hero_connected_title, conn.size)
+                tvHeroSub.text = conn.joinToString(getString(R.string.list_separator)) { it.name }
             }
             e.userPaused -> {
-                tvHeroEyebrow.text = "已暂停"
+                tvHeroEyebrow.text = getString(R.string.state_paused)
                 tvHeroEyebrow.setTextColor(warn)
-                tvHeroTitle.text = "声桥已暂停"
-                tvHeroSub.text = "点下方「继续连接」或通知里的「继续」恢复"
+                tvHeroTitle.text = getString(R.string.hero_paused_title)
+                tvHeroSub.text = getString(R.string.hero_paused_sub)
             }
             e.running -> {
                 tvHeroEyebrow.text = "SEARCHING"
                 tvHeroEyebrow.setTextColor(warn)
-                tvHeroTitle.text = if (onlineCount > 0) "$onlineCount 台在线 · 未推流" else "正在寻找你的电脑…"
-                tvHeroSub.text = "配对过的电脑一出现就会自动连接"
+                tvHeroTitle.text = if (onlineCount > 0) getString(R.string.hero_online_not_streaming, onlineCount) else getString(R.string.status_searching_pc)
+                tvHeroSub.text = getString(R.string.hero_auto_hint)
             }
             else -> {
-                tvHeroEyebrow.text = "AIRBRIDGE"
+                tvHeroEyebrow.text = "SOUNDRELAY"
                 tvHeroEyebrow.setTextColor(text3)
-                tvHeroTitle.text = "还没开始"
-                tvHeroSub.text = "点下方「开始搜索」，让手机开始监听电脑的出现"
+                tvHeroTitle.text = getString(R.string.hero_not_started)
+                tvHeroSub.text = getString(R.string.hero_not_started_sub)
             }
         }
 
@@ -606,10 +617,10 @@ class MainActivity : Activity() {
         val rtt = e.worstRttMs
         when {
             conn.isEmpty() -> { tvLatencyBadge.text = "-- ms"; tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_idle); tvLatencyBadge.setTextColor(text2) }
-            rtt < 0 -> { tvLatencyBadge.text = "测速中…"; tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_idle); tvLatencyBadge.setTextColor(text2) }
-            rtt < 30 -> { tvLatencyBadge.text = String.format("%.0f ms · 流畅", rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_good); tvLatencyBadge.setTextColor(accent) }
-            rtt <= 80 -> { tvLatencyBadge.text = String.format("%.0f ms · 一般", rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_warn); tvLatencyBadge.setTextColor(warn) }
-            else -> { tvLatencyBadge.text = String.format("%.0f ms · 偏高", rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_bad); tvLatencyBadge.setTextColor(error) }
+            rtt < 0 -> { tvLatencyBadge.text = getString(R.string.latency_measuring); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_idle); tvLatencyBadge.setTextColor(text2) }
+            rtt < 30 -> { tvLatencyBadge.text = getString(R.string.latency_good, rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_good); tvLatencyBadge.setTextColor(accent) }
+            rtt <= 80 -> { tvLatencyBadge.text = getString(R.string.latency_fair, rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_warn); tvLatencyBadge.setTextColor(warn) }
+            else -> { tvLatencyBadge.text = getString(R.string.latency_poor, rtt); tvLatencyBadge.setBackgroundResource(R.drawable.bg_badge_bad); tvLatencyBadge.setTextColor(error) }
         }
 
         val connVis = if (conn.isNotEmpty()) View.VISIBLE else View.GONE
@@ -625,14 +636,14 @@ class MainActivity : Activity() {
             if (e.currentRateCode == Protocol.RATE_48K) {
                 chipRate.text = "48 kHz"; chipRate.setTextColor(text1)
             } else {
-                chipRate.text = "${e.sampleRateHz / 1000} kHz · 已自动优化"; chipRate.setTextColor(warn)
+                chipRate.text = getString(R.string.chip_rate_optimized, e.sampleRateHz / 1000); chipRate.setTextColor(warn)
             }
-            tvStats.text = String.format(
-                "麦克风 → %d 台 · 扬声器 ← %d 台混音 · 丢包(最差) %.1f%% · 抖动 %.0f ms · 缓冲 %d ms",
+            tvStats.text = getString(
+                R.string.stats_format,
                 conn.count { it.micSend }, conn.count { it.speakerRecv },
-                e.worstLossPct, e.worstJitterMs, e.displayBufferMs
+                e.worstLossPct, e.worstJitterMs, e.displayBufferMs, e.rxPackets
             )
-            tvMicState.text = if (e.micEnabled) "● 正在发送 · ${e.sampleRateHz / 1000}kHz" else "已暂停"
+            tvMicState.text = if (e.micEnabled) getString(R.string.mic_state_sending_rate, e.sampleRateHz / 1000) else getString(R.string.state_paused)
             tvMicState.setTextColor(if (e.micEnabled) accent else text3)
             // echo suppression status: REAL active layers (v2.1 — NLMS wired live)
             val tvEcho = findViewById<TextView>(R.id.tvEchoStatus)
@@ -645,21 +656,30 @@ class MainActivity : Activity() {
             })
             if (overlaySettings.visibility == View.VISIBLE) {
                 findViewById<TextView>(R.id.tvEchoLayers).text = echoText
+                refreshSettingsStates() // keep the playout diagnostics line live
             }
-            tvSpkState.text = if (e.speakerEnabled) "● 正在播放（混音）" else "已暂停"
-            tvSpkState.setTextColor(if (e.speakerEnabled) sky else text3)
+            tvSpkState.text = when {
+                !e.speakerEnabled -> getString(R.string.state_paused)
+                e.playoutFaultActive -> "⚠ ${e.playoutFaultText ?: getString(R.string.playout_fault_default)}"
+                else -> getString(R.string.speaker_state_playing_mix)
+            }
+            tvSpkState.setTextColor(when {
+                !e.speakerEnabled -> text3
+                e.playoutFaultActive -> error
+                else -> sky
+            })
             // loop-guard note (defect 5c): visible for a few seconds after a block
             tvLoopGuardNote.visibility = if (e.loopGuardNoteActive) View.VISIBLE else View.GONE
             val elapsed = (now - connectedSinceMs) / 1000
-            tvElapsed.text = String.format("已推流 %02d:%02d · 断线会自动重连", elapsed / 60, elapsed % 60)
+            tvElapsed.text = getString(R.string.elapsed_streaming, elapsed / 60, elapsed % 60)
         } else {
-            tvElapsed.text = "已配对的电脑出现在同一网络时，会自动连接，无需打开 App 点按"
+            tvElapsed.text = getString(R.string.elapsed_auto_hint)
         }
 
         // re-entry prompt banner (v2.1, mode=每次询问): engine holds the ask
         val ask = e.pendingReturnAsk
         if (ask != null) {
-            tvReturnAskText.text = "${ask.name} 回来了，要连接吗？"
+            tvReturnAskText.text = getString(R.string.return_ask_text, ask.name)
             bannerReturnAsk.visibility = View.VISIBLE
         } else if (bannerReturnAsk.visibility == View.VISIBLE) {
             bannerReturnAsk.visibility = View.GONE
@@ -668,8 +688,8 @@ class MainActivity : Activity() {
         // headset banner (headset inheritance): a headset appeared mid-session
         val hsName = e.pendingHeadsetName
         if (hsName != null) {
-            tvHeadsetText.text = if (e.outputDeviceSel == "auto") "🎧 检测到耳机〈$hsName〉（自动模式已跟随系统，可固定切换）"
-                else "🎧 检测到耳机〈$hsName〉"
+            tvHeadsetText.text = if (e.outputDeviceSel == "auto") getString(R.string.headset_detected_auto, hsName)
+                else getString(R.string.headset_detected, hsName)
             bannerHeadset.visibility = View.VISIBLE
         } else if (bannerHeadset.visibility == View.VISIBLE) {
             bannerHeadset.visibility = View.GONE
@@ -690,19 +710,19 @@ class MainActivity : Activity() {
         when {
             !e.running -> {
                 btnStart.visibility = View.VISIBLE
-                btnStart.text = "开始搜索"
+                btnStart.text = getString(R.string.action_start_search)
                 btnStart.setBackgroundResource(R.drawable.btn_primary)
                 btnStart.setTextColor(onAccent)
             }
             e.userPaused -> {
                 btnStart.visibility = View.VISIBLE
-                btnStart.text = "继续连接"
+                btnStart.text = getString(R.string.btn_continue_connect)
                 btnStart.setBackgroundResource(R.drawable.btn_primary)
                 btnStart.setTextColor(onAccent)
             }
             conn.size >= 2 -> {
                 btnStart.visibility = View.VISIBLE
-                btnStart.text = "全部停止"
+                btnStart.text = getString(R.string.btn_stop_all)
                 btnStart.setBackgroundResource(R.drawable.btn_stop)
                 btnStart.setTextColor(error)
             }
@@ -719,7 +739,7 @@ class MainActivity : Activity() {
         }
         if (e.running && views.isEmpty() && now - searchStartMs > 5000) {
             tvNoDevice.visibility = View.VISIBLE
-            tvNoDevice.text = "还没找到电脑\n确保电脑端已打开，且与手机连着同一个 WiFi；或点「配对新电脑」看附近列表。"
+            tvNoDevice.text = getString(R.string.no_device_text)
         } else {
             tvNoDevice.visibility = View.GONE
         }
@@ -731,18 +751,18 @@ class MainActivity : Activity() {
     /** Honest echo-layer status, shared by the channel card and Settings. */
     private fun echoStatusText(): String {
         val e = AudioEngine
-        if (!e.echoSuppressionEnabled) return "已关闭（啸叫保护仍在工作）"
-        val l1 = if (e.fxAecActive) "系统AEC已启用" else "系统AEC不可用"
+        if (!e.echoSuppressionEnabled) return getString(R.string.echo_off)
+        val l1 = if (e.fxAecActive) getString(R.string.echo_aec_on) else getString(R.string.echo_aec_off)
         val l2 = when {
-            e.nlmsActive -> "NLMS 已锁定 · 回声抵消 ${String.format("%.0f", e.nlmsErleDb)} dB"
-            e.nlmsBulkDelay >= 0 -> "NLMS 已锁定 · 测量中"
-            else -> "NLMS 锁定中…"
+            e.nlmsActive -> getString(R.string.echo_nlms_locked_erle, e.nlmsErleDb)
+            e.nlmsBulkDelay >= 0 -> getString(R.string.echo_nlms_measuring)
+            else -> getString(R.string.echo_nlms_locking)
         }
         var s = "$l1 · $l2"
-        if (e.headsetOutputActive) s += " · 耳机模式 · 回声风险低（抑制已放松）"
-        if (e.doubleTalkActive) s += " · 双讲保护中（人声优先）"
-        if (e.echoDuckingActive) s += " · 残留回声压制中"
-        if (e.howlGainDb < 0f) s += " · 啸叫保护 ${e.howlGainDb.toInt()} dB"
+        if (e.headsetOutputActive) s += getString(R.string.echo_headset_suffix)
+        if (e.doubleTalkActive) s += getString(R.string.echo_doubletalk_suffix)
+        if (e.echoDuckingActive) s += getString(R.string.echo_ducking_suffix)
+        if (e.howlGainDb < 0f) s += getString(R.string.echo_howl_suffix, e.howlGainDb.toInt())
         return s
     }
 
@@ -767,11 +787,11 @@ class MainActivity : Activity() {
         val paired = views.filter { it.paired }
         val fresh = views.filter { !it.paired }
         if (paired.isNotEmpty()) {
-            deviceContainer.addView(sectionTitle("我的电脑"))
+            deviceContainer.addView(sectionTitle(getString(R.string.section_my_pcs)))
             for (v in paired) deviceContainer.addView(buildPairedCard(v, now))
         }
         if (fresh.isNotEmpty()) {
-            deviceContainer.addView(sectionTitle("新设备"))
+            deviceContainer.addView(sectionTitle(getString(R.string.section_new_devices)))
             for (v in fresh) deviceContainer.addView(buildUnpairedRow(v))
         }
     }
@@ -817,23 +837,23 @@ class MainActivity : Activity() {
         nameTv.layoutParams = nlp
         nameRow.addView(nameTv)
         when {
-            v.versionMismatch || partnerVersionDiffers(v) -> nameRow.addView(badgeView("电脑端版本不一致", R.drawable.bg_badge_bad, error))
+            v.versionMismatch || partnerVersionDiffers(v) -> nameRow.addView(badgeView(getString(R.string.badge_pc_version_mismatch), R.drawable.bg_badge_bad, error))
             v.connected && v.rttMs >= 0 -> {
                 val (bg, col, word) = when {
-                    v.rttMs < 30 -> Triple(R.drawable.bg_badge_good, accent, "流畅")
-                    v.rttMs <= 80 -> Triple(R.drawable.bg_badge_warn, warn, "一般")
-                    else -> Triple(R.drawable.bg_badge_bad, error, "偏高")
+                    v.rttMs < 30 -> Triple(R.drawable.bg_badge_good, accent, getString(R.string.quality_good))
+                    v.rttMs <= 80 -> Triple(R.drawable.bg_badge_warn, warn, getString(R.string.quality_fair))
+                    else -> Triple(R.drawable.bg_badge_bad, error, getString(R.string.quality_poor))
                 }
                 nameRow.addView(badgeView(String.format("%.0f ms · %s", v.rttMs, word), bg, col))
             }
-            v.connected -> nameRow.addView(badgeView("已连接", R.drawable.bg_badge_idle, text2))
-            v.autoPaused -> nameRow.addView(badgeView("自动连接失败 · 点按重试", R.drawable.bg_badge_bad, error))
-            v.online -> nameRow.addView(badgeView("在线 · 未连接", R.drawable.bg_badge_idle, text2))
-            else -> nameRow.addView(badgeView("离线", R.drawable.bg_chip, text2))
+            v.connected -> nameRow.addView(badgeView(getString(R.string.badge_connected), R.drawable.bg_badge_idle, text2))
+            v.autoPaused -> nameRow.addView(badgeView(getString(R.string.badge_auto_failed), R.drawable.bg_badge_bad, error))
+            v.online -> nameRow.addView(badgeView(getString(R.string.badge_online_not_connected), R.drawable.bg_badge_idle, text2))
+            else -> nameRow.addView(badgeView(getString(R.string.badge_offline), R.drawable.bg_chip, text2))
         }
         header.addView(nameRow)
         val sub = TextView(this)
-        sub.text = "${v.os.ifEmpty { "电脑" }} · ${v.ip}" + if (v.pcAppVersion.isNotEmpty()) " · 电脑端 v${v.pcAppVersion}" else ""
+        sub.text = "${v.os.ifEmpty { getString(R.string.pc_default_name) }} · ${v.ip}" + if (v.pcAppVersion.isNotEmpty()) getString(R.string.card_sub_pc_version_suffix, v.pcAppVersion) else ""
         sub.setTextColor(text2); sub.textSize = 12f; sub.typeface = android.graphics.Typeface.MONOSPACE
         header.addView(sub)
         card.addView(header)
@@ -844,10 +864,10 @@ class MainActivity : Activity() {
         autoRow.layoutParams = alp
         val autoLabel = TextView(this)
         if (v.justAutoConnected && v.connected) {
-            autoLabel.text = "● 已自动连接 · 刚刚"
+            autoLabel.text = getString(R.string.card_auto_connected_just_now)
             autoLabel.setTextColor(accent)
         } else {
-            autoLabel.text = "自动连接"
+            autoLabel.text = getString(R.string.label_auto_connect)
             autoLabel.setTextColor(text1)
         }
         autoLabel.textSize = 13f
@@ -886,10 +906,10 @@ class MainActivity : Activity() {
             row.addView(sw)
             return row
         }
-        channels.addView(switchRow("麦克风 → 这台电脑", v.micSend, accent, accentDim) { c ->
+        channels.addView(switchRow(getString(R.string.switch_mic_to_this_pc), v.micSend, accent, accentDim) { c ->
             v.deviceId?.let { AudioEngine.setMicSend(it, c) }
         })
-        channels.addView(switchRow("电脑声音 → 手机扬声器", v.speakerRecv, sky, skyDim) { c ->
+        channels.addView(switchRow(getString(R.string.switch_speaker_from_this_pc), v.speakerRecv, sky, skyDim) { c ->
             v.deviceId?.let { AudioEngine.setSpeakerRecv(it, c) }
         })
 
@@ -897,7 +917,7 @@ class MainActivity : Activity() {
         val volRow = LinearLayout(this); volRow.orientation = LinearLayout.HORIZONTAL; volRow.gravity = Gravity.CENTER_VERTICAL
         val vlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); vlp.topMargin = dp(4)
         volRow.layoutParams = vlp
-        val volLabel = TextView(this); volLabel.text = "这台的音量"; volLabel.setTextColor(text2); volLabel.textSize = 13f
+        val volLabel = TextView(this); volLabel.text = getString(R.string.card_volume_label); volLabel.setTextColor(text2); volLabel.textSize = 13f
         volRow.addView(volLabel)
         val seek = SeekBar(this)
         seek.max = 100
@@ -916,7 +936,7 @@ class MainActivity : Activity() {
         })
         volRow.addView(seek)
         val volText = TextView(this)
-        volText.text = if (v.muted) "静音" else "${(v.speakerVolume * 100).toInt()}%"
+        volText.text = if (v.muted) getString(R.string.muted_label) else "${(v.speakerVolume * 100).toInt()}%"
         volText.setTextColor(if (v.muted) error else text2); volText.textSize = 12f; volText.typeface = android.graphics.Typeface.MONOSPACE
         volRow.addView(volText)
         val muteBtn = TextView(this)
@@ -939,13 +959,13 @@ class MainActivity : Activity() {
         when {
             v.connected -> {
                 val b = Button(this)
-                b.text = "停止"; b.setTextColor(error); b.setBackgroundResource(R.drawable.btn_secondary)
+                b.text = getString(R.string.action_stop); b.setTextColor(error); b.setBackgroundResource(R.drawable.btn_secondary)
                 b.setOnClickListener { AudioEngine.disconnectDevice(v.ip); lastCardSignature = "" }
                 footer.addView(b)
             }
             v.online -> {
                 val b = Button(this)
-                b.text = "连接"; b.setTextColor(accent); b.setBackgroundResource(R.drawable.btn_secondary)
+                b.text = getString(R.string.action_connect); b.setTextColor(accent); b.setBackgroundResource(R.drawable.btn_secondary)
                 b.setOnClickListener {
                     if (v.autoPaused) AudioEngine.retryAutoConnect(v.ip) else AudioEngine.connectDevice(v.ip)
                     lastCardSignature = ""
@@ -954,7 +974,7 @@ class MainActivity : Activity() {
             }
             else -> {
                 val t = TextView(this)
-                t.text = "上次连接 ${formatLastSeen(v.lastSeenMs)}"
+                t.text = getString(R.string.last_connected_format, formatLastSeen(v.lastSeenMs))
                 t.setTextColor(text3); t.textSize = 12f; t.typeface = android.graphics.Typeface.MONOSPACE
                 footer.addView(t)
             }
@@ -989,11 +1009,11 @@ class MainActivity : Activity() {
         col.layoutParams = clp
         val nameTv = TextView(this); nameTv.text = v.name; nameTv.setTextColor(text1); nameTv.textSize = 14f; nameTv.typeface = android.graphics.Typeface.DEFAULT_BOLD
         col.addView(nameTv)
-        val sub = TextView(this); sub.text = "${v.os.ifEmpty { "电脑" }} · 未配对 · ${v.ip}"; sub.setTextColor(text2); sub.textSize = 12f
+        val sub = TextView(this); sub.text = getString(R.string.device_unpaired_sub, v.os.ifEmpty { getString(R.string.pc_default_name) }, v.ip); sub.setTextColor(text2); sub.textSize = 12f
         col.addView(sub)
         row.addView(col)
         val pairBtn = Button(this)
-        pairBtn.text = "配对"
+        pairBtn.text = getString(R.string.action_pair)
         pairBtn.setTextColor(sky)
         pairBtn.setBackgroundResource(R.drawable.bg_btn_outline_sky)
         pairBtn.setOnClickListener { openScan(v) }
@@ -1004,40 +1024,40 @@ class MainActivity : Activity() {
 
     private fun showDeviceMenu(anchor: View, v: AudioEngine.DeviceView) {
         val menu = PopupMenu(this, anchor)
-        menu.menu.add(0, 1, 0, "重命名")
-        menu.menu.add(0, 2, 0, "查看配对信息")
-        menu.menu.add(0, 3, 0, "忘记这台电脑")
+        menu.menu.add(0, 1, 0, getString(R.string.menu_rename))
+        menu.menu.add(0, 2, 0, getString(R.string.menu_pairing_info))
+        menu.menu.add(0, 3, 0, getString(R.string.menu_forget))
         menu.setOnMenuItemClickListener { item ->
             val id = v.deviceId ?: return@setOnMenuItemClickListener false
             when (item.itemId) {
                 1 -> {
                     val et = EditText(this)
                     et.setText(v.name)
-                    et.hint = "给这台电脑起个名字"
+                    et.hint = getString(R.string.rename_hint)
                     AlertDialog.Builder(this)
-                        .setTitle("重命名")
+                        .setTitle(getString(R.string.rename_title))
                         .setView(et)
-                        .setPositiveButton("保存") { _, _ -> AudioEngine.renameDevice(id, et.text.toString()); lastCardSignature = "" }
-                        .setNegativeButton("取消", null)
+                        .setPositiveButton(getString(R.string.action_save)) { _, _ -> AudioEngine.renameDevice(id, et.text.toString()); lastCardSignature = "" }
+                        .setNegativeButton(getString(R.string.action_cancel), null)
                         .show()
                 }
                 2 -> {
                     AlertDialog.Builder(this)
-                        .setTitle("配对信息")
-                        .setMessage(AudioEngine.pairingInfo(id) ?: "无")
-                        .setPositiveButton("好", null)
+                        .setTitle(getString(R.string.pairing_info_title))
+                        .setMessage(AudioEngine.pairingInfo(id) ?: getString(R.string.pairing_info_none))
+                        .setPositiveButton(getString(R.string.action_ok), null)
                         .show()
                 }
                 3 -> {
                     AlertDialog.Builder(this)
-                        .setTitle("忘记这台电脑？")
-                        .setMessage("忘记后需要重新配对才能再自动连接。")
-                        .setPositiveButton("忘记") { _, _ ->
+                        .setTitle(getString(R.string.forget_title))
+                        .setMessage(getString(R.string.forget_msg))
+                        .setPositiveButton(getString(R.string.action_forget)) { _, _ ->
                             AudioEngine.disconnectDevice(v.ip)
                             AudioEngine.forgetDevice(id)
                             lastCardSignature = ""
                         }
-                        .setNegativeButton("取消", null)
+                        .setNegativeButton(getString(R.string.action_cancel), null)
                         .show()
                 }
             }
@@ -1060,7 +1080,7 @@ class MainActivity : Activity() {
     }
 
     private fun formatLastSeen(ms: Long): String {
-        if (ms <= 0) return "从未连接"
+        if (ms <= 0) return getString(R.string.last_seen_never)
         val then = Calendar.getInstance().apply { timeInMillis = ms }
         val nowCal = Calendar.getInstance()
         val hm = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
@@ -1068,8 +1088,8 @@ class MainActivity : Activity() {
         val yest = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
         val isYest = then.get(Calendar.YEAR) == yest.get(Calendar.YEAR) && then.get(Calendar.DAY_OF_YEAR) == yest.get(Calendar.DAY_OF_YEAR)
         return when {
-            sameDay -> "今天 $hm"
-            isYest -> "昨天 $hm"
+            sameDay -> getString(R.string.last_seen_today, hm)
+            isYest -> getString(R.string.last_seen_yesterday, hm)
             else -> SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(ms))
         }
     }
@@ -1080,7 +1100,7 @@ class MainActivity : Activity() {
         if (!AudioEngine.running) {
             if (!ensureAudioPermissions()) return false
             startBridge()
-            Toast.makeText(this, "声桥已启动，正在配对…", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.engine_started_pairing_toast), Toast.LENGTH_SHORT).show()
         }
         return true
     }
@@ -1090,13 +1110,13 @@ class MainActivity : Activity() {
         overlayCode.visibility = View.GONE
         overlayConfirm.visibility = View.GONE
         overlayScan.visibility = View.VISIBLE
-        tvScanHint.text = "对准电脑屏幕上的二维码"
+        tvScanHint.text = getString(R.string.scan_hint_aim)
         tvScanHint.setTextColor(text1)
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startScanner()
         } else {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
-            tvScanHint.text = "需要相机权限才能扫码——授权后重试，或用下方「输入配对码」"
+            tvScanHint.text = getString(R.string.scan_need_camera_perm_long)
         }
     }
 
@@ -1128,7 +1148,7 @@ class MainActivity : Activity() {
         val token = o?.optString("token") ?: ""
         val ip = o?.optString("ip") ?: ""
         if (o == null || o.optString("app") != "AirBridge" || deviceId.isEmpty() || token.isEmpty() || ip.isEmpty()) {
-            tvScanHint.text = "这不是声桥的配对二维码"
+            tvScanHint.text = getString(R.string.scan_not_soundrelay_qr)
             tvScanHint.setTextColor(error)
             qrScanner?.resume()
             return
@@ -1143,7 +1163,7 @@ class MainActivity : Activity() {
         // mismatch note (§4.1): scanned a different PC than the row tapped
         val target = pairTarget
         if (target != null && target.deviceId != null && target.deviceId != deviceId) {
-            Toast.makeText(this, "扫到的不是这台电脑，已按扫到的设备配对", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.scan_different_pc_toast), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1174,7 +1194,7 @@ class MainActivity : Activity() {
         }
         tvCodeError.visibility = View.VISIBLE
         tvCodeError.setTextColor(text2)
-        tvCodeError.text = "正在查找这台电脑…"
+        tvCodeError.text = getString(R.string.code_searching)
     }
 
     private fun pollPairingProgress(now: Long) {
@@ -1194,7 +1214,7 @@ class MainActivity : Activity() {
                 overlayCode.visibility = View.GONE
                 overlayScan.visibility = View.GONE
                 overlayDiscover.visibility = View.GONE
-                tvBannerAutoText.text = "这台电脑已经配对过了"
+                tvBannerAutoText.text = getString(R.string.already_paired_banner)
                 bannerIps = emptyList()
                 bannerAuto.visibility = View.VISIBLE
                 bannerShownAtMs = now
@@ -1208,9 +1228,9 @@ class MainActivity : Activity() {
             if (overlayCode.visibility == View.VISIBLE) {
                 tvCodeError.visibility = View.VISIBLE
                 tvCodeError.setTextColor(error)
-                tvCodeError.text = "配对码不存在或已过期，请核对后重试"
+                tvCodeError.text = getString(R.string.code_invalid_error)
             } else {
-                Toast.makeText(this, "配对超时，电脑那边没有确认，请重试", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.pair_timeout_toast), Toast.LENGTH_LONG).show()
             }
         }
         if (AudioEngine.codeSearch == null && pairSubmittedAtMs > 0 && awaitingIp == null && pending == null && !confirmShown && overlayCode.visibility == View.VISIBLE && now - pairSubmittedAtMs > 18000) {
@@ -1226,7 +1246,7 @@ class MainActivity : Activity() {
         overlayDiscover.visibility = View.GONE
         overlayConfirm.visibility = View.VISIBLE
         findViewById<TextView>(R.id.tvConfirmName).text = "🖥  ${s.name}"
-        findViewById<TextView>(R.id.tvConfirmSub).text = "${s.os.ifEmpty { "电脑" }} · ${s.ip}"
+        findViewById<TextView>(R.id.tvConfirmSub).text = "${s.os.ifEmpty { getString(R.string.pc_default_name) }} · ${s.ip}"
         val code = s.pendingVerifyCode ?: "------"
         findViewById<TextView>(R.id.tvConfirmVerify).text = code.toCharArray().joinToString(" ")
         findViewById<TextView>(R.id.tvConfirmError).visibility = View.GONE
@@ -1258,7 +1278,7 @@ class MainActivity : Activity() {
             val ip = confirmIp ?: return@setOnClickListener
             val auto = findViewById<Switch>(R.id.swAutoConfirm).isChecked
             val sess = AudioEngine.sessions[ip]
-            val name = sess?.name ?: "电脑"
+            val name = sess?.name ?: getString(R.string.pc_default_name)
             val did = sess?.deviceId
             AudioEngine.confirmPairing(ip, auto)
             overlayConfirm.visibility = View.GONE
@@ -1266,7 +1286,7 @@ class MainActivity : Activity() {
             awaitingIp = null
             pairSubmittedAtMs = 0L
             if (did != null) { flashDeviceId = did; flashUntilMs = System.currentTimeMillis() + 1000 }
-            tvBannerAutoText.text = "✓ 已配对 $name，自动连接已${if (auto) "开启" else "关闭"}"
+            tvBannerAutoText.text = getString(R.string.paired_banner, name, getString(if (auto) R.string.auto_on_word else R.string.auto_off_word))
             bannerIps = emptyList()
             bannerAuto.visibility = View.VISIBLE
             bannerShownAtMs = System.currentTimeMillis()
@@ -1292,17 +1312,21 @@ class MainActivity : Activity() {
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         val whitelisted = pm.isIgnoringBatteryOptimizations(packageName)
         findViewById<TextView>(R.id.tvBatteryState).text =
-            if (whitelisted) "电池优化：已关闭，声桥在后台不会被系统杀掉 ✓"
-            else "电池优化：未关闭——后台运行可能被系统杀掉，建议关闭"
+            if (whitelisted) getString(R.string.battery_ok)
+            else getString(R.string.battery_warn)
         findViewById<TextView>(R.id.tvEchoLayers).text = echoStatusText()
         // actual (confirmed) audio devices — not just the selection
         val e = AudioEngine
         val fb = e.routeFallbackNote
         findViewById<TextView>(R.id.tvOutputRouteState).text =
-            "当前输出：${e.outputRouteText}" +
-                (if (e.headsetOutputActive) " · 耳机模式 · 回声风险低" else "") +
-                (if (fb != null) " · $fb" else "")
-        findViewById<TextView>(R.id.tvInputDeviceState).text = "当前输入：${e.actualInputText()}"
+            getString(R.string.output_state_format, e.outputRouteText) +
+                (if (e.headsetOutputActive) getString(R.string.output_headset_suffix) else "") +
+                (if (fb != null) " · $fb" else "") +
+                getString(R.string.playout_diag_prefix, e.playoutDiagText) +
+                (if (e.routePinFailed) getString(R.string.output_route_pin_failed_suffix) else "") +
+                getString(R.string.loopguard_count_suffix, e.loopGuard.detectionCount) +
+                (if (e.loopGuard.cappedReleaseCount > 0) getString(R.string.loopguard_capped_suffix, e.loopGuard.cappedReleaseCount) else "")
+        findViewById<TextView>(R.id.tvInputDeviceState).text = getString(R.string.input_state_format, e.actualInputText())
     }
 
     /** Build the output/input device radio lists from the LIVE device set. */
@@ -1312,7 +1336,7 @@ class MainActivity : Activity() {
         val rgOut = findViewById<android.widget.RadioGroup>(R.id.rgOutputRoute)
         rgOut.setOnCheckedChangeListener(null)
         rgOut.removeAllViews()
-        addDeviceRadio(rgOut, "auto", "自动（跟随系统：有耳机用耳机，否则扬声器）", outSel == "auto")
+        addDeviceRadio(rgOut, "auto", getString(R.string.output_auto_label), outSel == "auto")
         for (d in AudioEngine.commDevices()) {
             val key = "type:${d.type}|${d.name}"
             addDeviceRadio(rgOut, key, d.name, outSel == key)
@@ -1327,11 +1351,11 @@ class MainActivity : Activity() {
         val rgIn = findViewById<android.widget.RadioGroup>(R.id.rgInputDevices)
         rgIn.setOnCheckedChangeListener(null)
         rgIn.removeAllViews()
-        addDeviceRadio(rgIn, "auto", "自动（跟随系统）", inSel == "auto")
-        addDeviceRadio(rgIn, "builtin", "手机麦克风", inSel == "builtin")
+        addDeviceRadio(rgIn, "auto", getString(R.string.input_auto_label), inSel == "auto")
+        addDeviceRadio(rgIn, "builtin", getString(R.string.device_phone_mic), inSel == "builtin")
         for (d in AudioEngine.inputDevices()) {
             val key = "type:${d.type}|${d.name}"
-            addDeviceRadio(rgIn, key, "${d.name} 麦克风", inSel == key)
+            addDeviceRadio(rgIn, key, getString(R.string.input_device_mic_suffix, d.name), inSel == key)
         }
         rgIn.setOnCheckedChangeListener { group, checkedId ->
             val key = group.findViewById<android.widget.RadioButton>(checkedId)?.tag as? String ?: return@setOnCheckedChangeListener
@@ -1383,13 +1407,13 @@ class MainActivity : Activity() {
                 checked && !usingService && AudioEngine.running -> {
                     usingService = true
                     startBridgeService()
-                    Toast.makeText(this, "已切换为后台运行：关掉 App 声桥也继续工作", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.bg_on_toast), Toast.LENGTH_SHORT).show()
                 }
                 !checked && usingService -> {
                     BridgeService.stopEngineOnDestroy = false
                     stopService(Intent(this, BridgeService::class.java))
                     usingService = false
-                    Toast.makeText(this, "已切换为仅前台运行：关闭 App 后声桥会停止", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, getString(R.string.bg_off_toast), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1434,7 +1458,7 @@ class MainActivity : Activity() {
             }
             p.edit().putInt(AppSettings.KEY_MIC_MODE, mode).apply()
             AudioEngine.reloadSettings()
-            Toast.makeText(this, "麦克风模式将在下次连接时生效", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.mic_mode_effective_toast), Toast.LENGTH_SHORT).show()
         }
         // mic sensitivity radios (defect 3)
         val rgSens = findViewById<android.widget.RadioGroup>(R.id.rgMicSens)
@@ -1500,7 +1524,7 @@ class MainActivity : Activity() {
     private fun refreshDiscoverSheet(views: List<AudioEngine.DeviceView>) {
         val e = AudioEngine
         val nearby = e.nearbyDevices()
-        tvDiscoverStatus.text = "探寻中：局域网广播 · ${e.mdnsStatusText} · ${e.bleStatusText}"
+        tvDiscoverStatus.text = getString(R.string.discover_status_format, e.mdnsStatusText, e.bleStatusText)
         tvDiscoverEmpty.visibility = if (nearby.isEmpty()) View.VISIBLE else View.GONE
         val sig = nearby.joinToString("|") { n ->
             "${n.key}/${n.deviceId}/${n.ip}/${n.rssi}/${n.sources}/${views.firstOrNull { v -> v.deviceId == n.deviceId || v.ip == n.ip }?.connected}"
@@ -1517,7 +1541,7 @@ class MainActivity : Activity() {
         val view = views.firstOrNull { v -> (n.deviceId != null && v.deviceId == n.deviceId) || (n.ip != null && v.ip == n.ip) }
         val paired = view?.paired == true || (n.deviceId != null && AudioEngine.registry.containsKey(n.deviceId))
         val connected = view?.connected == true
-        val name = view?.name ?: n.name.ifEmpty { n.deviceId ?: n.bleAddress ?: "未知电脑" }
+        val name = view?.name ?: n.name.ifEmpty { n.deviceId ?: n.bleAddress ?: getString(R.string.unknown_pc) }
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
@@ -1532,32 +1556,32 @@ class MainActivity : Activity() {
         val nameTv = TextView(this); nameTv.text = "🖥  $name"; nameTv.setTextColor(text1); nameTv.textSize = 15f; nameTv.typeface = android.graphics.Typeface.DEFAULT_BOLD
         col.addView(nameTv)
         val srcText = n.sources.joinToString(" · ") { s ->
-            when (s) { "LAN" -> "局域网"; "MDNS" -> "mDNS"; "BLE" -> "蓝牙"; else -> s }
+            when (s) { "LAN" -> getString(R.string.source_lan); "MDNS" -> "mDNS"; "BLE" -> getString(R.string.source_ble); else -> s }
         }
-        val prox = n.rssi?.let { r -> when { r >= -60 -> "很近"; r >= -75 -> "附近"; else -> "较远" } }
+        val prox = n.rssi?.let { r -> when { r >= -60 -> getString(R.string.proximity_close); r >= -75 -> getString(R.string.proximity_near); else -> getString(R.string.proximity_far) } }
         val sub = TextView(this)
         sub.text = buildString {
-            append(view?.os ?: n.os.ifEmpty { "电脑" })
+            append(view?.os ?: n.os.ifEmpty { getString(R.string.pc_default_name) })
             append(" · ")
-            append(n.ip ?: "蓝牙发现 · 等待网络地址")
+            append(n.ip ?: getString(R.string.nearby_ble_waiting_ip))
             append(" · ").append(srcText)
             if (prox != null) append(" · ").append(prox)
-            if (paired) append(" · 已配对")
+            if (paired) append(getString(R.string.nearby_paired_suffix))
         }
         sub.setTextColor(text2); sub.textSize = 12f
         col.addView(sub)
         row.addView(col)
         val btn = Button(this)
         when {
-            connected -> { btn.text = "已连接"; btn.isEnabled = false }
-            n.ip == null -> { btn.text = "等待地址"; btn.isEnabled = false }
+            connected -> { btn.text = getString(R.string.badge_connected); btn.isEnabled = false }
+            n.ip == null -> { btn.text = getString(R.string.btn_waiting_address); btn.isEnabled = false }
             paired -> {
-                btn.text = "连接"
+                btn.text = getString(R.string.action_connect)
                 btn.setTextColor(accent); btn.setBackgroundResource(R.drawable.btn_secondary)
                 btn.setOnClickListener { AudioEngine.connectDevice(n.ip!!); overlayDiscover.visibility = View.GONE }
             }
             else -> {
-                btn.text = "配对"
+                btn.text = getString(R.string.action_pair)
                 btn.setTextColor(sky); btn.setBackgroundResource(R.drawable.bg_btn_outline_sky)
                 btn.setOnClickListener {
                     pairTarget = null

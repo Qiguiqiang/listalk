@@ -164,13 +164,13 @@ public sealed class AudioService : IDisposable
     public static string? RoutingConflict(AudioDeviceInfo input, AudioDeviceInfo output)
     {
         if (input.IsLoopback && input.Id == "loopback:" + output.Id)
-            return "采集源是手机麦克风输出设备的环回——手机的声音会被原样发回手机";
-        string inp = input.Name.Replace("（环回）", "").ToLowerInvariant();
+            return Loc.Tr("采集源是手机麦克风输出设备的环回——手机的声音会被原样发回手机");
+        string inp = input.Name.Replace("（环回）", "").Replace(" (Loopback)", "").ToLowerInvariant();
         string outp = output.Name.ToLowerInvariant();
         bool inCable = inp.Contains("cable output");
         bool outCable = outp.Contains("cable input");
         if (inCable && outCable)
-            return "采集源与手机麦克风共用同一条虚拟线缆（CABLE Output ← CABLE Input）——手机麦克风会混入电脑声音被发回";
+            return Loc.Tr("采集源与手机麦克风共用同一条虚拟线缆（CABLE Output ← CABLE Input）——手机麦克风会混入电脑声音被发回");
         return null;
     }
 
@@ -193,7 +193,7 @@ public sealed class AudioService : IDisposable
         foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
         {
             outputs.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName, IsLoopback = false, Score = DeviceScoring.OutputScore(d.FriendlyName), IsDefault = d.ID == defOut });
-            inputs.Add(new AudioDeviceInfo { Id = "loopback:" + d.ID, Name = d.FriendlyName + "（环回）", IsLoopback = true, Score = DeviceScoring.InputScore(d.FriendlyName + " loopback"), IsDefault = false });
+            inputs.Add(new AudioDeviceInfo { Id = "loopback:" + d.ID, Name = d.FriendlyName + Loc.T("（环回）", " (Loopback)"), IsLoopback = true, Score = DeviceScoring.InputScore(d.FriendlyName + " loopback"), IsDefault = false });
         }
         return (inputs, outputs);
     }

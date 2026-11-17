@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 rem ============================================================================
-rem  AirBridge Virtual Audio Driver - BUILD + TEST-SIGN (Route A, TEST ONLY)
+rem  SoundRelay Virtual Audio Driver - BUILD + TEST-SIGN (Route A, TEST ONLY)
 rem  Run on the Windows build machine (VS2022 + WDK installed). No admin needed.
 rem  Output: signed driver package copied to  build-output\
 rem ============================================================================

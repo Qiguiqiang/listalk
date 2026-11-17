@@ -83,7 +83,7 @@ class QrScanner(
             val id = cm.cameraIdList.firstOrNull { cid ->
                 cm.getCameraCharacteristics(cid).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
             } ?: cm.cameraIdList.firstOrNull() ?: run {
-                onError("这台手机没有可用的摄像头")
+                onError(context.getString(R.string.qr_no_camera))
                 return
             }
             val chars = cm.getCameraCharacteristics(id)
@@ -103,7 +103,7 @@ class QrScanner(
                 }, cameraHandler)
             }
             val texture = textureView.surfaceTexture ?: run {
-                onError("相机预览未就绪，请返回后重试")
+                onError(context.getString(R.string.qr_preview_not_ready))
                 return
             }
             texture.setDefaultBufferSize(1280, 720)
@@ -136,25 +136,25 @@ class QrScanner(
                                     try { s.setRepeatingRequest(builder.build(), null, cameraHandler) } catch (_: Exception) {}
                                 }
                                 override fun onConfigureFailed(s: CameraCaptureSession) {
-                                    onError("相机启动失败，请返回后重试或用配对码")
+                                    onError(context.getString(R.string.qr_start_failed))
                                 }
                             },
                             cameraHandler
                         )
                     } catch (e: Exception) {
                         Log.w("QrScanner", "session failed: ${e.message}")
-                        onError("相机启动失败，请返回后重试或用配对码")
+                        onError(context.getString(R.string.qr_start_failed))
                     }
                 }
-                override fun onDisconnected(device: CameraDevice) { device.close(); onError("相机被其他应用占用") }
-                override fun onError(device: CameraDevice, error: Int) { device.close(); onError("相机出错（$error），请重试或用配对码") }
+                override fun onDisconnected(device: CameraDevice) { device.close(); onError(context.getString(R.string.qr_camera_busy)) }
+                override fun onError(device: CameraDevice, error: Int) { device.close(); onError(context.getString(R.string.qr_camera_error, error)) }
             }, cameraHandler)
         } catch (e: SecurityException) {
             Log.w("QrScanner", "openCamera security: ${e.message}")
-            onError("没有相机权限，无法扫码")
+            onError(context.getString(R.string.qr_no_permission))
         } catch (e: Exception) {
             Log.w("QrScanner", "openCamera failed: ${e.message}")
-            onError("相机打开失败，请重试或用配对码")
+            onError(context.getString(R.string.qr_open_failed))
         }
     }
 
@@ -204,7 +204,7 @@ class QrScanner(
         }
     }
 
-    /** Re-arm after a rejected (non-AirBridge) code so scanning continues. */
+    /** Re-arm after a rejected (non-SoundRelay) code so scanning continues. */
     fun resume() {
         delivered = false
     }

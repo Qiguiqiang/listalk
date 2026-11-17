@@ -7,7 +7,7 @@ import android.util.Log
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * mDNS/Bonjour discovery (v2.1): browses the canonical AirBridge service
+ * mDNS/Bonjour discovery (v2.1): browses the canonical SoundRelay service
  * type (Protocol.MDNS_SERVICE_TYPE, `_airbridge._udp`) via the framework
  * NsdManager — no extra permission and no third-party library needed.
  * Sightings (service name + host IP) are merged by the engine with the
@@ -22,7 +22,7 @@ class MdnsDiscovery(
     private val context: Context,
     private val onSighting: (name: String, ip: String) -> Unit
 ) {
-    @Volatile var statusText: String = "mDNS 未启动"
+    @Volatile var statusText: String = context.getString(R.string.mdns_status_not_started)
         private set
     @Volatile var browsing: Boolean = false
         private set
@@ -35,12 +35,12 @@ class MdnsDiscovery(
     fun start() {
         if (browsing) return
         val mgr = try { context.getSystemService(Context.NSD_SERVICE) as? NsdManager } catch (_: Exception) { null }
-        if (mgr == null) { statusText = "这台手机不支持 mDNS 发现"; return }
+        if (mgr == null) { statusText = context.getString(R.string.mdns_unsupported); return }
         nsd = mgr
         val l = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {
                 browsing = true
-                statusText = "mDNS 发现已开启"
+                statusText = context.getString(R.string.mdns_on)
             }
             override fun onServiceFound(service: NsdServiceInfo) {
                 resolveQueue.add(service)
@@ -50,7 +50,7 @@ class MdnsDiscovery(
             override fun onDiscoveryStopped(serviceType: String) { browsing = false }
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 browsing = false
-                statusText = "mDNS 发现启动失败（$errorCode），仅用局域网广播"
+                statusText = context.getString(R.string.mdns_start_failed_code, errorCode)
                 Log.w("MdnsDiscovery", "start failed: $errorCode")
             }
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) { browsing = false }
@@ -59,7 +59,7 @@ class MdnsDiscovery(
         try {
             mgr.discoverServices(Protocol.MDNS_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, l)
         } catch (e: Exception) {
-            statusText = "mDNS 发现启动失败，仅用局域网广播"
+            statusText = context.getString(R.string.mdns_start_failed)
             Log.w("MdnsDiscovery", "discoverServices failed: ${e.message}")
         }
     }
@@ -95,6 +95,6 @@ class MdnsDiscovery(
         browsing = false
         listener = null
         resolveQueue.clear()
-        statusText = "mDNS 已停止"
+        statusText = context.getString(R.string.mdns_stopped)
     }
 }
