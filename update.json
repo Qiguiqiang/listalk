@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "2.2.0",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.0/SoundRelay-Android-v2.2.apk",
-    "sha256": "16d36079df58dac69d9928962ddecdd5b4c78935ace9bf5602a7e394ef6cad06",
-    "notes": "v2.2.0（两端同版本）：【修复】电脑声音到不了手机扬声器——播放路由钉死、AudioTrack 写入、LoopGuard 误拦三处缺陷已修，新增「收到音频包」计数便于定位；Mesh WiFi 漫游切换后自动重新对准、恢复推流；界面国际化：跟随系统语言显示中文/英文；更新清单迁至 GitHub 正式地址。 / EN: Fixed PC audio not reaching the phone speaker (routing pin, AudioTrack write, LoopGuard false-blocking) with a new received-packet counter; Mesh Wi-Fi roaming now re-targets automatically; UI follows system language (Chinese/English); update manifest moved to GitHub."
+    "version": "2.2.1",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.1/SoundRelay-Android-v2.2.1.apk",
+    "sha256": "6c97abf9817f468b57b8ab0a5940b1e404234ff3fde00da71a3c7503d017b74b",
+    "notes": "v2.2.1（两端同版本）：本版手机端功能与 v2.2.0 一致，仅版本号与电脑端对齐（两端同版本成套发布）；修复集中在电脑端——驱动组件安装的 Secure Boot 检测与「软件打不开」加固，详见电脑端说明。 / EN: No functional changes on Android in v2.2.1 — version aligned with the Windows release (both ends ship version-locked); the fixes are on the Windows side (driver-install Secure Boot detection and app won't-start hardening)."
   },
   "windows": {
-    "version": "2.2.0",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.0/SoundRelay-Setup-v2.2.exe",
-    "sha256": "3162f7d5b964823e31b58aa52fd7fa7c0e744798a0893f28cb6d6ef3973ad1f6",
-    "notes": "v2.2.0（两端同版本）：全新桌面界面（横向布局按定稿原型落地）；安装包集成「声音接力虚拟音频设备驱动（测试签名）」组件——自有虚拟声卡随包安装（默认勾选，可取消；需关 Secure Boot、开测试模式、重启一次自动续装），App 优先识别自有设备、VB-CABLE 仅兜底；界面国际化：跟随系统语言显示中文/英文；Mesh 漫游恢复；更新清单迁至 GitHub 正式地址。 / EN: New desktop UI per approved prototype; installer now bundles the SoundRelay virtual audio driver (test-signed, selected by default, optional; requires Secure Boot off, test mode on, one reboot to finish), the app prefers the own virtual device with VB-CABLE as fallback; UI follows system language; Mesh roaming recovery; update manifest moved to GitHub."
+    "version": "2.2.1",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.1/SoundRelay-Setup-v2.2.1.exe",
+    "sha256": "807224255fafbdd0e498891576f4ca0c41b5418b2ee24b67f07e30768b302212",
+    "notes": "v2.2.1（两端同版本）：【修复】驱动组件安装失败只报退出码——Secure Boot 检测改在提权步骤内读取注册表状态，开启时直接给出关闭 Secure Boot 的 BIOS 操作步骤，不再盲目失败；安装日志记录每条命令的完整输出，便于定位。【修复】软件打不开——新增单实例保护（已在托盘运行时会弹窗说明）、启动全程日志（%LOCALAPPDATA%\\AirBridge\\logs\\startup.log）、音频设备枚举与引擎启动异常兜底，启动失败会弹窗并给出日志路径。 / EN: Fixed driver component install failing with a bare exit code: Secure Boot is now detected inside the elevated step via the registry, with concrete BIOS steps shown when it is on, and full command output written to the install log. Fixed app won't-start cases: single-instance guard with a clear notice, full startup logging, and hardened audio-device enumeration / engine start — fatal startup errors now show a dialog with the log path."
   }
 }
