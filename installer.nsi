@@ -17,7 +17,7 @@ SetCompressor /SOLID lzma
 !include "nsDialogs.nsh"
 
 !define PRODUCT_NAME "声音接力 SoundRelay"
-!define PRODUCT_VERSION "2.2.2"
+!define PRODUCT_VERSION "2.2.3"
 !define PRODUCT_PUBLISHER "Gray"
 !ifndef SRC_DIR
     !define SRC_DIR "windows-native\stage-v22"
@@ -52,13 +52,13 @@ SetCompressor /SOLID lzma
 !insertmacro RequireDriverFile "${DRV_STAGE}\uninstall-driver.ps1"
 
 Name "${PRODUCT_NAME}"
-OutFile "SoundRelay-Setup-v2.2.2.exe"
+OutFile "SoundRelay-Setup-v${PRODUCT_VERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\AirBridge"
 InstallDirRegKey HKCU "Software\AirBridge" "InstallDir"
 RequestExecutionLevel user
-BrandingText "声音接力 SoundRelay 2.2.1"
+BrandingText "声音接力 SoundRelay ${PRODUCT_VERSION}"
 
-VIProductVersion "2.2.1.0"
+VIProductVersion "${PRODUCT_VERSION}.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"

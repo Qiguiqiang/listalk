@@ -40,14 +40,14 @@ Your phone's microphone can fan out to several PCs at the same time (a desktop a
 - **Multiple transports (roadmap)**: the relay doesn't care which link carries it — WiFi and USB (tethering / adb forwarding) work today; direct phone↔PC **Bluetooth** audio and pure USB-cable connections are in development. The protocol itself is transport-agnostic: whichever link connects is the one it uses
 - **Paired devices are remembered**: return to a paired environment and devices are discovered automatically, then connected according to your setting (ask every time / always automatically / never automatically)
 - **Runs in the background on both ends**: the PC app lives in the system tray and can start at boot; the phone runs a foreground service, so streaming continues with the screen off
-- **In-app updates**: both ends are released together, always at the same version; the apps check for updates and verify downloads with SHA-256 — anything that fails verification is refused; the update URL can be changed in settings
+- **In-app updates**: both ends are released together, always at the same version; the apps check for updates against the built-in update address and verify downloads with SHA-256 — anything that fails verification is refused
 - **Own-brand virtual audio driver (Windows, optional)**: once installed, Windows sound settings show "Speakers / Microphone (声音接力 SoundRelay Virtual Audio Device)" — no more borrowing a third-party virtual sound card. Currently a **test-signed** build: it requires Windows test mode to be enabled and Secure Boot to be off, so it is for personal use only; see [driver/README.md](driver/README.md) for the limitations
 
 ## Quick start
 
 1. **Download** the latest version from [Releases](https://github.com/Qiguiqiang/soundrelay/releases)
-   - Android: `PhoneAudioBridge-v2.1-debug.apk` (currently a debug-signed package; allow "Install unknown apps" when installing)
-   - Windows: the `AirBridge-Setup-v2.1.exe` installer (not code-signed yet; on first run Windows shows a SmartScreen prompt — choose "More info → Run anyway")
+   - Android: `SoundRelay-Android-v2.2.3.apk` (allow "Install unknown apps" when installing)
+   - Windows: the `SoundRelay-Setup-v2.2.3.exe` installer (not code-signed yet; on first run Windows shows a SmartScreen prompt — choose "More info → Run anyway")
    - Linux: use the Python version in `pc/` (see the scripts under [pc/](pc/))
 2. Connect the phone and the PC to the **same WiFi** (or use a USB cable with adb forwarding), and open the app on both ends
 3. On the phone, tap "Pair a new PC", pick your computer from the nearby list, and confirm the verification code shown on both ends matches
@@ -75,7 +75,7 @@ Repository layout:
 
 ## Project status
 
-A personal open-source project, **under active development**. Current version: v2.1.0. The core pipeline — two-way streaming, echo cancellation, automatic discovery, multiple devices, in-app updates — is complete and covered by local automated tests. Sound quality, audio routing on different phone brands, and roaming behavior across different Mesh routers are still being tested and refined on real devices — reports of your phone model and what you observe are welcome in Issues.
+A personal open-source project, **under active development**. Current version: v2.2.3. The core pipeline — two-way streaming, echo cancellation, automatic discovery, multiple devices, in-app updates — is complete and covered by local automated tests. Sound quality, audio routing on different phone brands, and roaming behavior across different Mesh routers are still being tested and refined on real devices — reports of your phone model and what you observe are welcome in Issues.
 
 PRs are welcome, too: please keep the protocol simple (one phone to many PCs, a single UDP channel). If you change the protocol, read `PROTOCOL.md` first and run `tools/check_protocol_consistency.py`.
 

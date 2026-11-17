@@ -22,7 +22,7 @@ namespace AirBridge;
 public static class UpdateChecker
 {
     public const string UpdateManifestUrl = "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json";
-    public const string CurrentVersion = "2.2.2";
+    public const string CurrentVersion = "2.2.3";
 
     public sealed record UpdateInfo(string Version, string Url, string Sha256, string Notes);
     public sealed record ManifestInfo(UpdateInfo? Windows, UpdateInfo? Android);
@@ -42,7 +42,7 @@ public static class UpdateChecker
     public static async Task<ManifestInfo?> FetchAsync(string manifestUrl)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.2");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.3");
         string json = await http.GetStringAsync(manifestUrl);
         using var doc = JsonDocument.Parse(json);
         return new ManifestInfo(ParseEntry(doc.RootElement, "windows"), ParseEntry(doc.RootElement, "android"));
@@ -67,7 +67,7 @@ public static class UpdateChecker
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.2");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.3");
             using var resp = await http.GetAsync(manifestUrl);
             int code = (int)resp.StatusCode;
             if (!resp.IsSuccessStatusCode)
@@ -104,9 +104,9 @@ public static class UpdateChecker
 
     public static async Task<string> DownloadAsync(UpdateInfo info, IProgress<double>? progress = null)
     {
-        string dest = Path.Combine(Path.GetTempPath(), $"AirBridge-Setup-{info.Version}.exe");
+        string dest = Path.Combine(Path.GetTempPath(), $"SoundRelay-Setup-{info.Version}.exe");
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.2");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.2.3");
         using var resp = await http.GetAsync(info.Url, HttpCompletionOption.ResponseHeadersRead);
         resp.EnsureSuccessStatusCode();
         long total = resp.Content.Headers.ContentLength ?? -1;

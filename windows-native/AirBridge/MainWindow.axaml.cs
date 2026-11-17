@@ -144,6 +144,18 @@ public partial class MainWindow : Window
         btnMin.Click += (_, _) => WindowState = WindowState.Minimized;
         btnMax.Click += (_, _) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         btnCloseWin.Click += (_, _) => Close();
+        // FB-5 (v2.2.3): maximize button shows the restore glyph while maximized.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty)
+            {
+                bool max = WindowState == WindowState.Maximized;
+                pathMaxIcon.IsVisible = !max;
+                pathRestoreIcon.IsVisible = max;
+            }
+            if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty)
+                UpdateDiscoveryActive();
+        };
         titleBar.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
@@ -158,6 +170,15 @@ public partial class MainWindow : Window
         btnSideUpdate.Click += (_, _) => OpenUpdateEntry();
     }
 
+    /// <summary>Cross-subnet sweep gate (v2.2.3 FB-6): the engine sweeps only
+    /// while the window is actually up (not tray-hidden/minimized) on the
+    /// Device or Discover page — the "discovery active" state.</summary>
+    private void UpdateDiscoveryActive()
+    {
+        _engine.DiscoveryActive = IsVisible && WindowState != WindowState.Minimized &&
+            (_page == Page.Device || _page == Page.Discover);
+    }
+
     private void ShowPage(Page p)
     {
         _page = p;
@@ -165,6 +186,7 @@ public partial class MainWindow : Window
         pageDiscover.IsVisible = p == Page.Discover;
         pageSettings.IsVisible = p == Page.Settings;
         pageAbout.IsVisible = p == Page.About;
+        UpdateDiscoveryActive();
         SetNav(navDevice, navDeviceBar, p == Page.Device);
         SetNav(navSettings, navSettingsBar, p == Page.Settings);
         SetNav(navUpdate, navUpdateBar, false);
@@ -265,12 +287,11 @@ public partial class MainWindow : Window
         swReturnAsk.CheckedChanged += (_, v) => { _settings.ReturnAskNotify = v; _settings.Save(); };
         swAutoCheck.CheckedChanged += (_, v) => { _settings.AutoCheckUpdates = v; _settings.Save(); };
 
-        txtUpdateUrl.Text = string.IsNullOrWhiteSpace(_settings.UpdateManifestUrl)
-            ? UpdateChecker.UpdateManifestUrl : _settings.UpdateManifestUrl;
-        txtUpdateUrl.TextChanged += (_, _) =>
+        txtExtraSubnets.Text = _settings.ExtraSubnets;
+        txtExtraSubnets.TextChanged += (_, _) =>
         {
             if (!_uiReady) return;
-            _settings.UpdateManifestUrl = (txtUpdateUrl.Text ?? "").Trim();
+            _settings.ExtraSubnets = (txtExtraSubnets.Text ?? "").Trim();
             _settings.Save();
         };
         btnCheckUpdate.Click += async (_, _) => await CheckForUpdatesAsync(manual: true);
@@ -611,8 +632,12 @@ public partial class MainWindow : Window
         _updateBusy = true;
         try
         {
-            string url = string.IsNullOrWhiteSpace(_settings.UpdateManifestUrl)
-                ? UpdateChecker.UpdateManifestUrl : _settings.UpdateManifestUrl.Trim();
+            // FB-10/FB-7: the update address is no longer user-editable —
+            // checks always use the built-in manifest URL. Any value an old
+            // version persisted in settings.json is ignored (the property
+            // was removed from AppSettings, so the stale field is dropped
+            // on the next save).
+            string url = UpdateChecker.UpdateManifestUrl;
             if (manual) { tvUpdateStatus.Text = Loc.Tr("正在检查更新…"); SetModalChecking(); }
             var report = await UpdateChecker.FetchReportAsync(url);
             AppendLog($"[更新] {report.Summary}");
@@ -683,7 +708,7 @@ public partial class MainWindow : Window
             modalProgText.Text = Loc.F("正在下载 SoundRelay-Setup-v{0}.exe…", "Downloading SoundRelay-Setup-v{0}.exe…", info.Version);
             modalProgPct.Text = "0%";
             progFill.Width = 0;
-            progFill.Background = (IBrush)Application.Current!.Resources["ProgGradient"]!;
+            progFill.Background = Tokens.B("ProgGradient");
             tvUpdateStatus.Text = Loc.F("正在下载新版本 {0}…", "Downloading update {0}…", info.Version);
             AppendLog($"[更新] 开始下载 {info.Version} …");
             var progress = new Progress<double>(pct => Dispatcher.UIThread.Post(() =>
@@ -1038,7 +1063,7 @@ public partial class MainWindow : Window
     {
         var nearby = _engine.NearbySnapshot();
         var sig = new System.Text.StringBuilder();
-        foreach (var kv in _config.PairedPhones) sig.Append($"P{kv.Key}|{kv.Value.Name}|{kv.Value.LastSeen}|");
+        foreach (var kv in _config.PairedPhones) sig.Append($"P{kv.Key}|{kv.Value.Name}|{kv.Value.LastSeen}|{kv.Value.LastIp}|");
         foreach (var d in nearby) sig.Append($"N{d.Key}|{d.Name}|{d.Ip}|{d.Online}|{d.Paired}|{string.Join("+", d.Transports)}|");
         sig.Append(_engine.Connected ? _engine.PeerName : "-");
         sig.Append(ReconnectMode());
@@ -1051,7 +1076,9 @@ public partial class MainWindow : Window
         {
             var live = nearby.FirstOrDefault(d => d.DeviceId == kv.Key);
             bool isCurrent = _engine.Connected && live is not null && live.Name == _engine.PeerName;
-            string ip = live?.Ip ?? "—";
+            // v2.2.3 FB-6: fall back to the learned/stored IP when the phone
+            // is not currently visible (e.g. on another subnet).
+            string ip = live?.Ip ?? (string.IsNullOrEmpty(kv.Value.LastIp) ? "—" : kv.Value.LastIp);
             string transport = live is not null && live.Transports.Count > 0 ? "WiFi" : "—";
             var seen = DateTimeOffset.FromUnixTimeSeconds((long)kv.Value.LastSeen).LocalDateTime;
             string seenText = seen.Date == DateTime.Today ? Loc.F("今天 {0}", "Today {0}", seen.ToString("HH:mm"))
@@ -1063,6 +1090,15 @@ public partial class MainWindow : Window
                 var connect = new Button { Content = Loc.Tr("连接"), Classes = { "btn", "sm", "ghost" } };
                 var dev = live;
                 connect.Click += (_, _) => { _engine.TapConnect(dev); AppendLog($"[发现] 已请求 {dev.Name} 连接（60 秒内放行它的自动重连）"); };
+                action.Children.Add(connect);
+            }
+            else if (!isCurrent && !string.IsNullOrEmpty(kv.Value.LastIp))
+            {
+                // offline but we know its last address (v2.2.3 FB-6): poke it
+                // directly by unicast — the only way to reach it across subnets.
+                var connect = new Button { Content = Loc.Tr("连接"), Classes = { "btn", "sm", "ghost" } };
+                var id = kv.Key; var nm = kv.Value.Name;
+                connect.Click += (_, _) => { _engine.TapConnectStored(id); AppendLog($"[发现] 已向 {nm} 的上次地址发起连接（60 秒内放行它的自动重连）"); };
                 action.Children.Add(connect);
             }
             action.Children.Add(new TextBlock { Text = Loc.Tr("自动连接"), FontSize = 11.5, Foreground = Text3, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
@@ -1105,7 +1141,7 @@ public partial class MainWindow : Window
         var iconBorder = new Border
         {
             Width = 40, Height = 40, CornerRadius = new CornerRadius(10),
-            Background = SurfaceInB, BorderBrush = (IBrush)Application.Current!.Resources["Stroke"]!, BorderThickness = new Thickness(1),
+            Background = SurfaceInB, BorderBrush = Tokens.B("Stroke"), BorderThickness = new Thickness(1),
         };
         this.TryFindResource(tablet ? "IconTablet" : "IconPhone", out var iconRes);
         iconBorder.Child = new Avalonia.Controls.Shapes.Path
@@ -1116,7 +1152,7 @@ public partial class MainWindow : Window
         };
         grid.Children.Add(iconBorder);
         var texts = new StackPanel { Margin = new Thickness(13, 0, 0, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        texts.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = (IBrush)Application.Current!.Resources["Text1"]! });
+        texts.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = Tokens.B("Text1") });
         texts.Children.Add(new TextBlock { Text = sub, FontSize = 11.5, Foreground = Text2, FontFamily = new FontFamily("Consolas, JetBrains Mono"), Margin = new Thickness(0, 2, 0, 0) });
         Grid.SetColumn(texts, 1);
         grid.Children.Add(texts);
@@ -1137,8 +1173,8 @@ public partial class MainWindow : Window
         grid.Children.Add(action);
         return new Border
         {
-            Background = paired ? (IBrush)Application.Current!.Resources["HeroGradient"]! : (IBrush)Application.Current!.Resources["Surface"]!,
-            BorderBrush = (IBrush)Application.Current!.Resources[paired ? "StrokeHi" : "Stroke"]!,
+            Background = paired ? Tokens.B("HeroGradient") : Tokens.B("Surface"),
+            BorderBrush = Tokens.B(paired ? "StrokeHi" : "Stroke"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(13),
             Padding = new Thickness(16, 13),

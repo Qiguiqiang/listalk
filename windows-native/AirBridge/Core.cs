@@ -24,6 +24,11 @@ public sealed class AppConfig
         [JsonPropertyName("lastSeen")] public double LastSeen { get; set; }
         [JsonPropertyName("appVersion")] public string AppVersion { get; set; } = "";
         [JsonPropertyName("protoVersion")] public int ProtoVersion { get; set; }
+        /// <summary>Last IP this phone was seen at (v2.2.3 FB-6): learned from
+        /// HELLO / discovery sightings and persisted, so the cross-subnet sweep
+        /// can probe its /24 and reconnect attempts can unicast it directly
+        /// even when broadcast cannot reach it.</summary>
+        [JsonPropertyName("lastIp")] public string LastIp { get; set; } = "";
     }
 
     public static string DirPath => Path.Combine(
@@ -93,8 +98,17 @@ public sealed class AppSettings
     /// <summary>"auto" | "48000" | "24000" | "16000"</summary>
     public string SampleRatePreference { get; set; } = "auto";
     public bool AllowPairedAutoReconnect { get; set; } = true;
-    /// <summary>Online-update manifest URL (editable in Settings; default = fixed hosted address).</summary>
-    public string UpdateManifestUrl { get; set; } = UpdateChecker.UpdateManifestUrl;
+    // NOTE (FB-10/FB-7): there is deliberately no persisted update-manifest
+    // URL here any more. Old versions stored one in settings.json (the
+    // v2.0-v2.2.0 factory default was a stale hosted address) and it
+    // shadowed the built-in GitHub URL forever. Update checks now always
+    // use UpdateChecker.UpdateManifestUrl; a stale "UpdateManifestUrl"
+    // field in an old settings.json is ignored on load and dropped on
+    // the next save.
+    /// <summary>Cross-subnet discovery (v2.2.3 FB-6): user-configured extra
+    /// subnets for the unicast sweep, free-form text ("192.168.88.0/24,
+    /// 192.168.99.0/24"), parsed by SubnetSweep.SplitSpecs/TryParseSubnetSpec.</summary>
+    public string ExtraSubnets { get; set; } = "";
     public bool MicToPc { get; set; } = true;
     public bool PcToPhone { get; set; } = true;
     public bool Paused { get; set; } = false;

@@ -73,6 +73,26 @@ public sealed class BridgeEngine
     private readonly Dictionary<string, DateTime> _connectWindows = new(); // deviceId -> expiry (PC-tap connect)
     private readonly object _winLock = new();
 
+    // ---- cross-subnet sweep (v2.2.3, FB-6) ----
+    // Broadcast/mDNS cannot cross the routers between Gray's routed subnets
+    // (192.168.23/88/99.0/24). While discovery is active (the UI sets
+    // DiscoveryActive), the sweep unicasts the SAME beacon payload to every
+    // host of the candidate /24s computed by SubnetSweep.cs (local
+    // interfaces + paired phones' learned last-IP subnets + user extras);
+    // a phone treats a unicast beacon exactly like a broadcast one
+    // (presence), and answers with its own discovery/HELLO. Pure logic and
+    // bounds live in SubnetSweep.cs / SweepPlan (mirror of the Android
+    // SubnetSweep.kt, JVM-proven by tools/TestSweep.kt).
+    private readonly SweepPlan _sweep = new();
+    private string _sweepSig = "";
+    private DateTime _sweepCycleDoneUtc = DateTime.MinValue;
+    private DateTime _lastPairSaveUtc = DateTime.MinValue;
+    /// <summary>Set by the UI: true while the window is visible on the
+    /// Device/Discover page. The sweep stays silent otherwise.</summary>
+    public volatile bool DiscoveryActive;
+    private const int SweepBatchPerTick = 10;   // per 250 ms tick ≈ 40 probes/s
+    private const double SweepCyclePauseSec = 5.0;
+
     public BridgeEngine(AppConfig config, AppSettings settings)
     {
         Config = config; Settings = settings;
@@ -128,6 +148,7 @@ public sealed class BridgeEngine
             d.Transports.Add(transport);
             d.Paired = Config.PairedPhones.ContainsKey(d.DeviceId);
         }
+        LearnPairedIp(deviceId, ip); // v2.2.3 FB-6: persist paired phones' IPs for the sweep
         StateChanged?.Invoke();
     }
 
@@ -155,6 +176,24 @@ public sealed class BridgeEngine
         StateChanged?.Invoke();
     }
 
+    /// <summary>Paired fast reconnect for a phone that is NOT currently visible
+    /// (v2.2.3 FB-6): unicast the DISCOVER_RESP + beacon straight to its stored
+    /// last IP — across subnet boundaries broadcast could never reach — and
+    /// open the same 60 s connect window. The phone's own reconnect policy
+    /// still decides whether it HELLOs back.</summary>
+    public void TapConnectStored(string deviceId)
+    {
+        if (!Config.PairedPhones.TryGetValue(deviceId, out var pp)) return;
+        if (string.IsNullOrEmpty(pp.LastIp) || !IPAddress.TryParse(pp.LastIp, out var ip)) return;
+        lock (_winLock) _connectWindows[deviceId] = DateTime.UtcNow.AddSeconds(60);
+        var ep = new IPEndPoint(ip, Protocol.Port);
+        SendDiscoverResp(ep);
+        Send(Protocol.TypeBeacon, BeaconPayload(), 0, 0, RateCode, ep);
+        LastEvent = $"已向 {pp.Name} 的上次地址 {pp.LastIp} 发起连接…";
+        Log?.Invoke(LastEvent);
+        StateChanged?.Invoke();
+    }
+
     private bool InWindow(Dictionary<string, DateTime> map, string id)
     {
         lock (_winLock)
@@ -176,6 +215,7 @@ public sealed class BridgeEngine
         Task.Run(() => RecvLoop(ct), ct);
         Task.Run(() => BeaconLoop(ct), ct);
         Task.Run(() => AdaptLoop(ct), ct);
+        Task.Run(() => SweepLoop(ct), ct);
         Log?.Invoke($"[监听] UDP {Config.Port}，等待手机连接…");
         StateChanged?.Invoke();
     }
@@ -228,6 +268,16 @@ public sealed class BridgeEngine
         Send(Protocol.TypeDiscoverResp, JsonBytes(resp), 0, 0, RateCode, addr);
     }
 
+    private byte[] BeaconPayload() => JsonBytes(new Dictionary<string, object?>
+    {
+        ["app"] = "PhoneAudioBridge", ["kind"] = "beacon",
+        ["name"] = Environment.MachineName, ["os"] = "Windows",
+        ["deviceId"] = Config.DeviceId,
+        ["tokenHash"] = string.IsNullOrEmpty(Config.Token) ? "" : Protocol.TokenHash(Config.Token),
+        ["appVersion"] = Protocol.AppVersion,
+        ["protoVersion"] = Protocol.ProtoVersion,
+    });
+
     private void BeaconLoop(CancellationToken ct)
     {
         var broadcast = new IPEndPoint(IPAddress.Broadcast, Config.Port);
@@ -236,21 +286,95 @@ public sealed class BridgeEngine
             try
             {
                 if (!string.IsNullOrEmpty(Config.DeviceId))
-                {
-                    var payload = new Dictionary<string, object?>
-                    {
-                        ["app"] = "PhoneAudioBridge", ["kind"] = "beacon",
-                        ["name"] = Environment.MachineName, ["os"] = "Windows",
-                        ["deviceId"] = Config.DeviceId,
-                        ["tokenHash"] = string.IsNullOrEmpty(Config.Token) ? "" : Protocol.TokenHash(Config.Token),
-                        ["appVersion"] = Protocol.AppVersion,
-                        ["protoVersion"] = Protocol.ProtoVersion,
-                    };
-                    Send(Protocol.TypeBeacon, JsonBytes(payload), 0, 0, RateCode, broadcast);
-                }
+                    Send(Protocol.TypeBeacon, BeaconPayload(), 0, 0, RateCode, broadcast);
             }
             catch { }
             try { Task.Delay(1000, ct).Wait(ct); } catch { break; }
+        }
+    }
+
+    // ---- cross-subnet sweep driver (v2.2.3 FB-6) ----
+    private void SweepLoop(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && Running)
+        {
+            try { Task.Delay(250, ct).Wait(ct); } catch { break; }
+            if (!Running) break;
+            try { DriveSweep(); } catch { /* a bad interface enumeration must not kill the loop */ }
+        }
+    }
+
+    private void DriveSweep()
+    {
+        // candidate inputs: local interface IPs, paired phones' learned IPs,
+        // the user's extra-subnet setting. Rebuild the plan when they change.
+        var localIps = new List<int>();
+        var ownIps = new HashSet<int>();
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    if (IPAddress.IsLoopback(ua.Address)) continue;
+                    if (SubnetSweep.TryParseIpv4(ua.Address.ToString(), out int v))
+                    { localIps.Add(v); ownIps.Add(v); }
+                }
+            }
+        }
+        catch { }
+        var pairedIps = new List<int>();
+        foreach (var pp in Config.PairedPhones.Values)
+            if (!string.IsNullOrEmpty(pp.LastIp) && SubnetSweep.TryParseIpv4(pp.LastIp, out int pv))
+                pairedIps.Add(pv);
+        var extras = SubnetSweep.SplitSpecs(Settings.ExtraSubnets ?? "");
+        string sig = string.Join(",", localIps) + "|" + string.Join(",", pairedIps) + "|" + string.Join(",", extras);
+        if (sig != _sweepSig)
+        {
+            _sweepSig = sig;
+            _sweep.Reset(SubnetSweep.CandidateSubnets(localIps, pairedIps, extras), pairedIps, ownIps);
+            _sweepCycleDoneUtc = DateTime.MinValue;
+        }
+        if (!DiscoveryActive || string.IsNullOrEmpty(Config.DeviceId)) return;
+        if (_sweep.IsCycleComplete)
+        {
+            if (_sweepCycleDoneUtc == DateTime.MinValue) _sweepCycleDoneUtc = DateTime.UtcNow;
+            if ((DateTime.UtcNow - _sweepCycleDoneUtc).TotalSeconds >= SweepCyclePauseSec)
+            { _sweep.BeginCycle(); _sweepCycleDoneUtc = DateTime.MinValue; }
+            else return;
+        }
+        var batch = _sweep.NextBatch(SweepBatchPerTick);
+        if (batch.Count == 0) return;
+        var payload = BeaconPayload();
+        foreach (int target in batch)
+        {
+            var ep = new IPEndPoint(IPAddress.Parse(SubnetSweep.FormatIpv4(target)), Config.Port);
+            Send(Protocol.TypeBeacon, payload, 0, 0, RateCode, ep);
+        }
+    }
+
+    /// <summary>A packet from [addr] answers the sweep: don't re-probe that
+    /// host until the next cycle. Called for discovery/session packets only
+    /// (not the audio hot path).</summary>
+    private void NoteSweepResponse(IPAddress addr)
+    {
+        if (SubnetSweep.TryParseIpv4(addr.ToString(), out int v)) _sweep.NoteResponse(v);
+    }
+
+    /// <summary>Learn + persist a paired phone's current IP (throttled save),
+    /// feeding candidate source (b) of the cross-subnet sweep.</summary>
+    private void LearnPairedIp(string deviceId, string ip)
+    {
+        if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(ip)) return;
+        if (!Config.PairedPhones.TryGetValue(deviceId, out var pp)) return;
+        if (pp.LastIp == ip) return;
+        pp.LastIp = ip;
+        if ((DateTime.UtcNow - _lastPairSaveUtc).TotalSeconds >= 15)
+        {
+            _lastPairSaveUtc = DateTime.UtcNow;
+            Config.Save();
         }
     }
 
@@ -278,12 +402,14 @@ public sealed class BridgeEngine
             {
                 case Protocol.TypeDiscover:
                 {
+                    NoteSweepResponse(addr.Address);
                     var info = ParseJson(payload);
                     NoteNearby(Str(info, "deviceId"), Str(info, "name"), Str(info, "os"), addr.Address.ToString(), "udp");
                     SendDiscoverResp(addr);
                     break;
                 }
                 case Protocol.TypeHello:
+                    NoteSweepResponse(addr.Address);
                     HandleHello(payload, addr);
                     break;
                 case Protocol.TypeAudio:
@@ -295,11 +421,13 @@ public sealed class BridgeEngine
                     Loop.FeedMicFrame(payload);
                     break;
                 case Protocol.TypePing:
+                    NoteSweepResponse(addr.Address);
                     Send(Protocol.TypePong, ReadOnlySpan<byte>.Empty, seq, ts, RateCode, addr);
                     if (Peer is not null) RetargetPeerIfRoamed(addr);
                     _lastRxUtc = DateTime.UtcNow;
                     break;
                 case Protocol.TypePong:
+                    NoteSweepResponse(addr.Address);
                     Stats.OnPong(ts);
                     _lastRxUtc = DateTime.UtcNow;
                     break;
@@ -384,7 +512,8 @@ public sealed class BridgeEngine
         {
             Config.PairedPhones[phoneId] = new AppConfig.PairedPhone
             { Name = PeerName, LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-              AppVersion = PhoneAppVersion, ProtoVersion = Math.Max(0, PhoneProtoVersion) };
+              AppVersion = PhoneAppVersion, ProtoVersion = Math.Max(0, PhoneProtoVersion),
+              LastIp = addr.Address.ToString() };
             Config.Save();
             ack["token"] = Config.Token;
             ack["verifyCode"] = Protocol.VerifyCodeFor(Config.Token, phoneId);
@@ -396,6 +525,7 @@ public sealed class BridgeEngine
         else if (Config.PairedPhones.TryGetValue(phoneId, out var pp))
         {
             pp.LastSeen = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            pp.LastIp = addr.Address.ToString(); // v2.2.3 FB-6: learned for the sweep
             if (PhoneAppVersion.Length > 0) pp.AppVersion = PhoneAppVersion;
             if (PhoneProtoVersion >= 0) pp.ProtoVersion = PhoneProtoVersion;
             Config.Save();

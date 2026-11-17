@@ -4,10 +4,9 @@ import android.content.Context
 
 /**
  * v2.1 settings system: ONE SharedPreferences file ("airbridge_settings")
- * shared by the Settings screen (MainActivity), the engine (reconnect
- * behaviour / notifications / echo toggle) and the update checker
- * (update-address field). Every key here is wired to real behaviour —
- * no decorative toggles.
+ * shared by the Settings screen (MainActivity) and the engine (reconnect
+ * behaviour / notifications / echo toggle). Every key here is wired to
+ * real behaviour — no decorative toggles.
  */
 object AppSettings {
     const val PREFS = "airbridge_settings"
@@ -22,8 +21,13 @@ object AppSettings {
     /** 事件通知 (auto-connect / re-entry prompts). The foreground-service
      *  notification itself is required by Android and cannot be hidden. */
     const val KEY_NOTIFICATIONS = "notifications_enabled"
-    /** Online-update manifest URL (editable update address). */
-    const val KEY_UPDATE_URL = "update_url"
+    // NOTE (FB-10/FB-7): there is deliberately no update-URL key here any
+    // more. The old "update_url" key held a user-editable manifest URL;
+    // its factory default was a stale hosted address and the settings UI
+    // saved the pre-filled value back on every check, so it shadowed the
+    // built-in GitHub URL forever. Checks now always use
+    // UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL, and MainActivity wipes
+    // the stale key on startup.
     /** Newest windows version seen in the last manifest fetch (display). */
     const val KEY_PARTNER_LATEST = "partner_latest_version"
     /** 输出路由: 0 = 扬声器 (default), 1 = 听筒, 2 = 自动 (headset if present). */
@@ -38,6 +42,10 @@ object AppSettings {
     const val KEY_INPUT_DEVICE = "input_device"
     /** 麦克风模式: 0 = 语音通话 (default), 1 = 高清拾音, 2 = 自动. Session-boundary only. */
     const val KEY_MIC_MODE = "mic_mode"
+    /** 跨网段发现 (v2.2.3 FB-6): user-configured extra subnets for the
+     *  unicast sweep, free-form text ("192.168.88.0/24, 192.168.99.0/24").
+     *  Parsed by SubnetSweep.splitSpecs/parseSubnetSpec. */
+    const val KEY_EXTRA_SUBNETS = "extra_subnets"
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -46,8 +54,4 @@ object AppSettings {
 
     fun bgServiceEnabled(ctx: Context): Boolean =
         prefs(ctx).getBoolean(KEY_BG_SERVICE, true)
-
-    fun updateUrl(ctx: Context): String =
-        prefs(ctx).getString(KEY_UPDATE_URL, UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL)
-            ?: UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL
 }

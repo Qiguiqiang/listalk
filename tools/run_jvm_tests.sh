@@ -23,3 +23,17 @@ KOTLINC="$HOME/tools/kotlinc/bin/kotlinc"
     app/src/main/java/com/qi/phoneaudiobridge/SessionRecovery.kt \
     tools/TestRecovery.kt
 "$JAVA_HOME/bin/java" -cp "tools/recovery-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestRecoveryKt
+# cross-subnet sweep core tests (v2.2.3 FB-6)
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/sweep-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/SubnetSweep.kt \
+    tools/TestSweep.kt
+"$JAVA_HOME/bin/java" -cp "tools/sweep-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestSweepKt
+# PC-side loop detector scenarios (v2.2.3 FB-8): the Kotlin port of
+# LoopDetector.cs (tools/PcLoopDetector.kt) driven through music+AEC
+# residual, a genuine electric loop, and the probe-resume failsafe.
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/looppc-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/EchoCanceller.kt \
+    app/src/main/java/com/qi/phoneaudiobridge/EchoProcessor.kt \
+    tools/PcLoopDetector.kt \
+    tools/TestLoopPc.kt
+"$JAVA_HOME/bin/java" -cp "tools/looppc-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestLoopPcKt

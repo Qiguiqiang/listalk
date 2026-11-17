@@ -1404,6 +1404,55 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:text="@string/settings_network_title"
+                android:textColor="#F2F5F9"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_extra_subnets_desc"
+                android:textColor="#9AA7B8"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/etExtraSubnets"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_input"
+                android:hint="@string/extra_subnets_hint"
+                android:inputType="text"
+                android:padding="10dp"
+                android:singleLine="true"
+                android:textColor="#F2F5F9"
+                android:textColorHint="#5F6D80"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnSaveSubnets"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/btn_secondary"
+                android:text="@string/action_save"
+                android:textColor="#F2F5F9"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+<LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:text="@string/settings_update_title"
                 android:textColor="#F2F5F9"
                 android:textSize="14sp"
@@ -1416,20 +1465,6 @@
                 android:layout_marginTop="4dp"
                 android:text="@string/update_info_placeholder"
                 android:textColor="#9AA7B8"
-                android:textSize="12sp" />
-
-            <EditText
-                android:id="@+id/etUpdateUrl"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_input"
-                android:hint="@string/update_url_hint"
-                android:inputType="textUri"
-                android:padding="10dp"
-                android:singleLine="true"
-                android:textColor="#F2F5F9"
-                android:textColorHint="#5F6D80"
                 android:textSize="12sp" />
 
             <Button

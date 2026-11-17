@@ -71,11 +71,14 @@
     <string name="ns_std_label">标准（平台降噪开）</string>
     <string name="ns_soft_label">轻柔（平台降噪关，更保护小声人声）</string>
     <string name="settings_input_device_label">输入设备</string>
+    <string name="settings_network_title">跨网段发现</string>
+    <string name="settings_extra_subnets_desc">家里主路由下挂多个网段时（如 192.168.88.0/24、192.168.99.0/24），广播和 mDNS 无法跨网段；填入后，发现时会逐个单播探测这些网段。本机所在网段与已配对电脑的历史网段会自动探测，无需填写。</string>
+    <string name="extra_subnets_hint">其他网段，如 192.168.88.0/24, 192.168.99.0/24</string>
+    <string name="extra_subnets_saved_toast">已保存，发现时将探测这些网段</string>
     <string name="settings_notifications_title">事件通知</string>
     <string name="settings_notifications_desc">自动连接、离开后回归询问等事件的通知。常驻的前台服务通知是系统要求，不受此开关影响。</string>
     <string name="settings_update_title">应用更新</string>
     <string name="update_info_placeholder">当前版本</string>
-    <string name="update_url_hint">更新地址 update.json</string>
     <string name="action_check_update">检查更新</string>
     <string name="discover_title">← 附近的电脑</string>
     <string name="discover_searching">正在探寻周边设备…</string>

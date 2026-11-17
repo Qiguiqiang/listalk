@@ -151,9 +151,16 @@ class MainActivity : Activity() {
 
     private fun updatePrefs() = getSharedPreferences("airbridge_settings", Context.MODE_PRIVATE)
 
-    private fun updateManifestUrl(): String =
-        updatePrefs().getString("update_url", UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL)
-            ?: UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL
+    // FB-10/FB-7: the update address is no longer user-editable — checks
+    // always use UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL. The old
+    // persisted "update_url" value (an old version pre-filled the field
+    // and saved it back on every check, self-perpetuating the stale
+    // Muse-hosted default) is wiped once here and never read again.
+    private fun wipeStaleUpdateUrl() {
+        if (updatePrefs().contains("update_url")) {
+            updatePrefs().edit().remove("update_url").apply()
+        }
+    }
 
     private fun wireUpdateUi() {
         // Inject localized templates into the (resource-free) update
@@ -166,18 +173,15 @@ class MainActivity : Activity() {
             errorInvalidManifest = getString(R.string.update_manifest_invalid),
             errorNetwork = { getString(R.string.update_error_network, it) }
         )
-        val et = findViewById<EditText>(R.id.etUpdateUrl)
-        et.setText(updateManifestUrl())
+        wipeStaleUpdateUrl()
         findViewById<TextView>(R.id.tvUpdateInfo).text = getString(R.string.update_current_version, UpdateChecker.APP_VERSION)
         findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener {
-            val url = et.text.toString().trim()
-            if (url.isNotEmpty()) updatePrefs().edit().putString("update_url", url).apply()
             checkUpdate(manual = true)
         }
     }
 
     private fun checkUpdate(manual: Boolean) {
-        val url = updateManifestUrl()
+        val url = UpdateChecker.DEFAULT_UPDATE_MANIFEST_URL
         val tvInfo = findViewById<TextView>(R.id.tvUpdateInfo)
         // v2.2 defect B: a click must be VISIBLE immediately — never a
         // silent no-op. The card then lands on exactly one outcome:
@@ -1481,6 +1485,15 @@ class MainActivity : Activity() {
         rgNs.setOnCheckedChangeListener { _, checkedId ->
             p.edit().putInt(AppSettings.KEY_NS_MODE, if (checkedId == R.id.rbNsStd) 0 else 1).apply()
             AudioEngine.reloadSettings()
+        }
+        // cross-subnet discovery extras (v2.2.3 FB-6): free-form subnet
+        // list, parsed by the engine's SubnetSweep on every reload.
+        val etSubnets = findViewById<EditText>(R.id.etExtraSubnets)
+        etSubnets.setText(p.getString(AppSettings.KEY_EXTRA_SUBNETS, "") ?: "")
+        findViewById<Button>(R.id.btnSaveSubnets).setOnClickListener {
+            p.edit().putString(AppSettings.KEY_EXTRA_SUBNETS, etSubnets.text.toString().trim()).apply()
+            AudioEngine.reloadSettings()
+            Toast.makeText(this, getString(R.string.extra_subnets_saved_toast), Toast.LENGTH_SHORT).show()
         }
         // device pickers (headset inheritance)
         buildDevicePickers()

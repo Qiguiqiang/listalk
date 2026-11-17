@@ -6,6 +6,7 @@
         Width="1160" Height="680"
         MinWidth="940" MinHeight="580"
         ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         ExtendClientAreaTitleBarHeightHint="40"
         Background="{StaticResource Bg}">
   <!-- Desktop UI per UI_SPEC_DESKTOP.md / preview_desktop.html (approved prototype):
@@ -30,14 +31,23 @@
           <TextBlock Name="tbMachine" Text="· 本机" FontSize="12.5" Foreground="{StaticResource Text2}" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <!-- FB-5 (v2.2.3): icons drawn once, here — the Window sets
+               ExtendClientAreaChromeHints="NoChrome" so the Fluent template's
+               own CaptionButtons no longer overlay these (that overlay was
+               the ghosted/double icons in Gray's screenshot). Geometry sits
+               on a 12px grid with 1.0 strokes; btnMax swaps to the restore
+               glyph while maximized (code-behind, WindowState). -->
           <Button Name="btnMin" Classes="wctl" ToolTip.Tip="最小化">
-            <Path Data="M0,5.5 L11,5.5" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.1" Width="11" Height="11" Stretch="Uniform"/>
+            <Path Data="M2,6 L10,6" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1" Width="12" Height="12" Stretch="Uniform"/>
           </Button>
           <Button Name="btnMax" Classes="wctl" ToolTip.Tip="最大化 / 还原">
-            <Border Width="10" Height="10" BorderBrush="{Binding $parent[Button].Foreground}" BorderThickness="1.1"/>
+            <Panel Width="12" Height="12">
+              <Path Name="pathMaxIcon" Data="M3,3 L9,3 L9,9 L3,9 Z" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1" Width="12" Height="12" Stretch="Uniform"/>
+              <Path Name="pathRestoreIcon" Data="M5,2 L10,2 L10,7 L7,7 M5,2 L5,5 M7,10 L2,10 L2,5 L7,5 Z" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1" Width="12" Height="12" Stretch="Uniform" IsVisible="False"/>
+            </Panel>
           </Button>
           <Button Name="btnCloseWin" Classes="wctl close" ToolTip.Tip="关闭到托盘">
-            <Path Data="M1,1 L10,10 M10,1 L1,10" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.1" Width="11" Height="11" Stretch="Uniform"/>
+            <Path Data="M3,3 L9,9 M9,3 L3,9" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1" Width="12" Height="12" Stretch="Uniform"/>
           </Button>
         </StackPanel>
       </Grid>
@@ -95,7 +105,7 @@
                   <Border Name="navAboutBar" Width="3" CornerRadius="1.5" Background="{StaticResource Accent}" Margin="-10,1,7,1" IsVisible="False"/>
                   <Path Grid.Column="1" Classes="icon" Data="{StaticResource IconInfo}" Stroke="{Binding $parent[Button].Foreground}" Width="17" Height="17" VerticalAlignment="Center"/>
                   <TextBlock Grid.Column="2" Text="关于" Margin="11,0,0,0" VerticalAlignment="Center"/>
-                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.2.2" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.2.3" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
                 </Grid>
               </Button>
             </StackPanel>
@@ -113,7 +123,7 @@
               </StackPanel>
             </Border>
             <Grid Margin="6,0,0,0">
-              <TextBlock Name="sideVersion" Text="v2.2.2" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+              <TextBlock Name="sideVersion" Text="v2.2.3" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
               <Button Name="btnSideUpdate" Content="有新版本" FontSize="11" FontWeight="SemiBold"
                       Background="{StaticResource Warn}" Foreground="{StaticResource Bg}"
                       CornerRadius="999" Padding="9,2.5" BorderThickness="0"
@@ -479,6 +489,15 @@
                       <local:SwitchControl Name="swCloseToTray" Grid.Column="1" Width="38" Height="22" Small="True" VerticalAlignment="Center"/>
                     </Grid>
                   </Border>
+                  <Border BorderBrush="#8C26303F" BorderThickness="0,1,0,0" Padding="18,12">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="跨网段发现" Classes="t135"/>
+                        <TextBlock Text="家里有多个网段时（如 192.168.88.0/24、192.168.99.0/24），广播无法跨网段；填入后将逐个单播探测这些网段，多个用逗号分隔。本机网段与已配对手机的历史网段会自动探测" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                      </StackPanel>
+                      <TextBox Name="txtExtraSubnets" Grid.Column="1" Classes="mono-input" Width="340" VerticalAlignment="Center"/>
+                    </Grid>
+                  </Border>
                 </StackPanel>
               </Border>
               <!-- group: audio -->
@@ -526,21 +545,12 @@
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="自动检查更新" Classes="t135"/>
-                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.2.2 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.2.3 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
                       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <local:SwitchControl Name="swAutoCheck" Width="38" Height="22" Small="True" VerticalAlignment="Center"/>
                         <Button Name="btnCheckUpdate" Classes="btn sm" Content="检查更新"/>
                       </StackPanel>
-                    </Grid>
-                  </Border>
-                  <Border BorderBrush="#8C26303F" BorderThickness="0,1,0,0" Padding="18,12">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="更新地址" Classes="t135"/>
-                        <TextBlock Text="更新包来源；将来可改为你自己的服务器" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                      </StackPanel>
-                      <TextBox Name="txtUpdateUrl" Grid.Column="1" Classes="mono-input" Width="340" VerticalAlignment="Center"/>
                     </Grid>
                   </Border>
                   <Border BorderBrush="#8C26303F" BorderThickness="0,1,0,0" Padding="18,12">
@@ -651,7 +661,7 @@
                   <StackPanel Grid.Column="1" Margin="16,0,0,0">
                     <TextBlock Text="声音接力 SoundRelay" Classes="h19"/>
                     <TextBlock Text="让声音在电脑、手机和耳机之间自由接力" Classes="desc" FontSize="12.5" Margin="0,5,0,0"/>
-                    <TextBlock Name="tbAboutVer" Text="版本 v2.2.2 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
+                    <TextBlock Name="tbAboutVer" Text="版本 v2.2.3 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
                   </StackPanel>
                 </Grid>
               </Border>
@@ -711,9 +721,9 @@
             <StackPanel Grid.Column="1" Margin="12,0,0,0">
               <TextBlock Name="modalTitle" Text="发现新版本" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
               <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                <TextBlock Name="modalVerFrom" Text="v2.2.2" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
+                <TextBlock Name="modalVerFrom" Text="v2.2.3" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
                 <TextBlock Text=" → " Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
-                <TextBlock Name="modalVerTo" Text="v2.2.2" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
+                <TextBlock Name="modalVerTo" Text="v2.2.3" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
                 <TextBlock Name="modalVerExtra" Text="" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
               </StackPanel>
             </StackPanel>

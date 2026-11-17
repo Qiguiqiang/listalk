@@ -280,6 +280,10 @@ object AudioEngine {
 
     /** Short dropouts always auto-resume, whatever the mode. */
     private const val SHORT_DROPOUT_MS = 60_000L
+    /** Cross-subnet sweep pacing (v2.2.3 FB-6): probes per 1 s adapt
+     *  tick, and the idle pause between two full sweep cycles. */
+    private const val SWEEP_BATCH_PER_TICK = 30
+    private const val SWEEP_CYCLE_PAUSE_MS = 5_000L
     /** Absences at least this long count as "离开后回归" for the ASK prompt. */
     private const val LONG_ABSENCE_MS = 600_000L // 10 min
 
@@ -294,6 +298,7 @@ object AudioEngine {
         micSensitivity = sp.getInt(AppSettings.KEY_MIC_SENSITIVITY, 0)
         micMode = sp.getInt(AppSettings.KEY_MIC_MODE, 0)
         nsMode = sp.getInt(AppSettings.KEY_NS_MODE, 1)
+        extraSubnetsRaw = sp.getString(AppSettings.KEY_EXTRA_SUBNETS, "") ?: ""
         if (running) {
             applyOutputRoute()
             applyInputDevice()
@@ -684,6 +689,19 @@ object AudioEngine {
      *  source a session may be retargeted from after a roam — stored IPs
      *  are never trusted once a fresher sighting disagrees. */
     private val peerDirectory = PeerDirectory()
+
+    // ---------------- cross-subnet sweep (v2.2.3, FB-6) ----------------
+    // Broadcast/mDNS cannot cross the routers between Gray's routed
+    // subnets (192.168.23/88/99.0/24). The sweep unicasts the SAME
+    // DISCOVER packet to every host of the candidate /24s computed by
+    // SubnetSweep.kt (local interfaces + paired last IPs + user extras);
+    // a PC answers exactly as it does to broadcast. Pure logic + bounds
+    // live in SubnetSweep.kt / SweepPlan (JVM-tested, tools/TestSweep.kt).
+    @Volatile var extraSubnetsRaw: String = ""
+    private val sweepPlan = SweepPlan()
+    @Volatile private var sweepSig = ""
+    private var sweepCycleDoneAtMs = 0L
+
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastLocalIps: Set<String> = emptySet()
 
@@ -776,6 +794,9 @@ object AudioEngine {
         thread(name = "ab-adapt") { adaptLoop() }
         startDiscovery()
         registerNetworkCallback()
+        // paired fast reconnect (v2.2.3 FB-6): aim at stored IPs right
+        // away instead of waiting for a first broadcast sighting.
+        tryDirectReconnectPaired(System.currentTimeMillis())
     }
 
     // ---------------- network-change resilience (v2.2 defect A) ----------------
@@ -910,6 +931,11 @@ object AudioEngine {
             if (s.connected) { s.reResolving = true; s.resolvingSinceMs = now }
         }
         sendDiscoverBroadcast()
+        // new network (v2.2.3 FB-6): sweep candidates rebuild on the
+        // next adapt tick via the changed local-IP set; also re-aim
+        // direct reconnect attempts at stored paired IPs immediately.
+        sweepSig = ""
+        tryDirectReconnectPaired(now)
     }
 
     // ---------------- nearby discovery (v2.1: LAN + mDNS + BLE merged) ----------------
@@ -1422,18 +1448,117 @@ object AudioEngine {
         }
     }
 
-    private fun sendDiscoverBroadcast() {
-        val sock = socket ?: return
+    private fun discoverPacket(): ByteArray {
         val json = JSONObject()
             .put("app", "PhoneAudioBridge")
             .put("kind", "discover")
             .put("name", phoneName)
             .put("deviceId", phoneDeviceId)
             .toString().toByteArray(Charsets.UTF_8)
-        val bytes = Protocol.pack(Protocol.TYPE_DISCOVER, Protocol.flags(Protocol.CODEC_PCM16, currentRateCode), 0, Protocol.nowUs(), json)
+        return Protocol.pack(Protocol.TYPE_DISCOVER, Protocol.flags(Protocol.CODEC_PCM16, currentRateCode), 0, Protocol.nowUs(), json)
+    }
+
+    private fun sendDiscoverBroadcast() {
+        val sock = socket ?: return
+        val bytes = discoverPacket()
         try {
             sock.send(DatagramPacket(bytes, bytes.size, InetAddress.getByName("255.255.255.255"), Protocol.PORT))
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Cross-subnet sweep driver (v2.2.3 FB-6), called once per adapt
+     * tick (1 s). Rebuilds the candidate plan when its inputs change
+     * (local subnets / paired IPs / extra-subnet setting), then sends
+     * at most [SWEEP_BATCH_PER_TICK] unicast DISCOVER probes — and only
+     * while discovery is active (see [sweepActive]). A full cycle over
+     * Gray's three subnets is ~760 probes ≈ 26 ticks; paired last IPs
+     * and gateways are probed in the first tick.
+     */
+    private fun driveSweep(nowMs: Long) {
+        val localIps = lastLocalIps.mapNotNull { SubnetSweep.parseIpv4(it) }
+        val pairedIps = registry.values.mapNotNull { SubnetSweep.parseIpv4(it.lastIp) }
+        val extras = SubnetSweep.splitSpecs(extraSubnetsRaw)
+        val sig = localIps.joinToString(",") + "|" + pairedIps.joinToString(",") + "|" + extras.joinToString(",")
+        if (sig != sweepSig) {
+            sweepSig = sig
+            // priority: paired last IPs first, then PCs sighted this run —
+            // a sighted PC gets a unicast DISCOVER back so the PC's own
+            // nearby list learns THIS phone across the subnet boundary too.
+            val prio = LinkedHashSet<Int>()
+            prio.addAll(pairedIps)
+            for (v in presenceIp.values) SubnetSweep.parseIpv4(v)?.let { prio.add(it) }
+            sweepPlan.reset(
+                SubnetSweep.candidateSubnets(localIps, pairedIps, extras),
+                prio.toList(),
+                localIps.toSet()
+            )
+            sweepCycleDoneAtMs = 0L
+        }
+        if (!sweepActive(nowMs)) return
+        if (sweepPlan.isCycleComplete()) {
+            if (sweepCycleDoneAtMs == 0L) sweepCycleDoneAtMs = nowMs
+            if (nowMs - sweepCycleDoneAtMs >= SWEEP_CYCLE_PAUSE_MS) {
+                sweepPlan.beginCycle()
+                sweepCycleDoneAtMs = 0L
+            } else return
+        }
+        val batch = sweepPlan.nextBatch(SWEEP_BATCH_PER_TICK)
+        if (batch.isEmpty()) return
+        val sock = socket ?: return
+        val bytes = discoverPacket()
+        for (target in batch) {
+            try {
+                val addr = InetAddress.getByName(SubnetSweep.formatIpv4(target)) ?: continue
+                sock.send(DatagramPacket(bytes, bytes.size, addr, Protocol.PORT))
+            } catch (_: Exception) {}
+        }
+    }
+
+    /** Discovery is "active" for sweep purposes while the UI is in the
+     *  foreground (device list / discover sheet), a code search runs, a
+     *  session is trying to connect, or a paired PC is being sought
+     *  under a reconnect mode that allows auto-connect. Otherwise the
+     *  sweep stays silent (battery) — broadcast discovery is unaffected. */
+    private fun sweepActive(nowMs: Long): Boolean {
+        if (uiInForeground || codeSearch != null) return true
+        if (sessions.values.any { it.wantConnect && !it.connected }) return true
+        if (!userPaused && reconnectMode != RECONNECT_NEVER) {
+            for (d in registry.values) {
+                if (!d.autoConnect) continue
+                val s = sessions.values.firstOrNull { it.deviceId == d.deviceId }
+                if (s == null || !s.connected) return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Paired-device fast reconnect (v2.2.3 FB-6): before any presence
+     * exists (cold start, network change, a just-marked absence), aim a
+     * session straight at the paired PC's stored last IP and let the
+     * EXISTING consent machinery ([onDeviceReappeared]: per-device
+     * auto-connect, the §5 fuse, the return-ask) decide — in parallel
+     * with broadcast discovery and the sweep, which retarget the
+     * session if a fresher sighting disagrees. Mode gate: 总是自动
+     * always; 每次询问/从不 only for a KNOWN short absence (<60 s —
+     * the dropout that just happened), never for a cold guess.
+     */
+    private fun tryDirectReconnectPaired(nowMs: Long) {
+        if (userPaused) return
+        for (d in registry.values) {
+            if (!d.autoConnect || d.lastIp.isEmpty()) continue
+            val existing = sessions.values.firstOrNull { it.deviceId == d.deviceId }
+            if (existing != null && (existing.connected || existing.wantConnect)) continue
+            if (peerDirectory.isFresh(d.deviceId, nowMs)) continue // presence flow owns it
+            val knownAbsence = existing?.let { if (it.absentSinceMs > 0L) nowMs - it.absentSinceMs else -1L } ?: -1L
+            val allowed = reconnectMode == RECONNECT_AUTO || knownAbsence in 1..SHORT_DROPOUT_MS
+            if (!allowed) continue
+            val s = ensureSession(d.lastIp)
+            if (s.deviceId == null) s.deviceId = d.deviceId
+            Log.i(TAG, "direct reconnect attempt to paired ${d.displayName} at stored ${d.lastIp}")
+            onDeviceReappeared(s, d, if (knownAbsence >= 0L) knownAbsence else 0L, nowMs)
+        }
     }
 
     // ---------------- receive ----------------
@@ -1453,6 +1578,7 @@ object AudioEngine {
                     onPresence(json, ip, nowMs)
                 }
                 Protocol.TYPE_HELLO_ACK -> {
+                    SubnetSweep.parseIpv4(ip)?.let { sweepPlan.noteResponse(it) }
                     val s = ensureSession(ip)
                     val wasConnected = s.connected
                     s.addr = pkt.address
@@ -1516,6 +1642,8 @@ object AudioEngine {
     }
 
     private fun onPresence(json: String, ip: String, nowMs: Long) {
+        // a sighting answers the sweep: don't re-probe this host this cycle
+        SubnetSweep.parseIpv4(ip)?.let { sweepPlan.noteResponse(it) }
         val o = try { JSONObject(json) } catch (_: Exception) { return }
         val deviceId = o.optString("deviceId")
         val name = o.optString("name").ifEmpty { ip }
@@ -1781,6 +1909,10 @@ object AudioEngine {
                 lastDiscoverMs = nowMs
             }
 
+            // cross-subnet unicast sweep (v2.2.3 FB-6): the only
+            // discovery channel that crosses routers between subnets
+            driveSweep(nowMs)
+
             // route-drift watchdog: re-pin if the OEM stack moved the
             // confirmed communication device away from our target.
             confirmOutputRoute()
@@ -1791,6 +1923,10 @@ object AudioEngine {
                 if (s.wasPresent && s.lastBeaconMs > 0L && nowMs - s.lastBeaconMs > 3000) {
                     s.wasPresent = false
                     s.absentSinceMs = s.lastBeaconMs
+                    // absence edge (v2.2.3 FB-6): immediately aim a
+                    // direct unicast attempt at the stored IP instead of
+                    // waiting for a broadcast that may never cross.
+                    tryDirectReconnectPaired(nowMs)
                 }
             }
 

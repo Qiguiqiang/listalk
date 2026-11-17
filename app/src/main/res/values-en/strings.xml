@@ -71,11 +71,14 @@
     <string name="ns_std_label">Standard (platform noise suppression on)</string>
     <string name="ns_soft_label">Gentle (platform noise suppression off; protects quiet voices)</string>
     <string name="settings_input_device_label">Input device</string>
+    <string name="settings_network_title">Cross-subnet discovery</string>
+    <string name="settings_extra_subnets_desc">When your main router serves several subnets (e.g. 192.168.88.0/24, 192.168.99.0/24), broadcast and mDNS cannot cross between them; subnets entered here are probed host-by-host by unicast during discovery. Your own subnet and paired PCs’ past subnets are probed automatically.</string>
+    <string name="extra_subnets_hint">Extra subnets, e.g. 192.168.88.0/24, 192.168.99.0/24</string>
+    <string name="extra_subnets_saved_toast">Saved — these subnets will be probed during discovery</string>
     <string name="settings_notifications_title">Event notifications</string>
     <string name="settings_notifications_desc">Notifications for auto-connect, return prompts and similar events. The persistent foreground-service notification is required by Android and isn’t affected by this switch.</string>
     <string name="settings_update_title">App updates</string>
     <string name="update_info_placeholder">Current version</string>
-    <string name="update_url_hint">Update manifest URL (update.json)</string>
     <string name="action_check_update">Check for updates</string>
     <string name="discover_title">← Nearby PCs</string>
     <string name="discover_searching">Searching for nearby devices…</string>
