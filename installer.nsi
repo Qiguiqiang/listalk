@@ -17,7 +17,7 @@ SetCompressor /SOLID lzma
 !include "nsDialogs.nsh"
 
 !define PRODUCT_NAME "声音接力 SoundRelay"
-!define PRODUCT_VERSION "2.2.0"
+!define PRODUCT_VERSION "2.2.1"
 !define PRODUCT_PUBLISHER "Gray"
 !ifndef SRC_DIR
     !define SRC_DIR "windows-native\stage-v22"
@@ -52,13 +52,13 @@ SetCompressor /SOLID lzma
 !insertmacro RequireDriverFile "${DRV_STAGE}\uninstall-driver.ps1"
 
 Name "${PRODUCT_NAME}"
-OutFile "SoundRelay-Setup-v2.2.exe"
+OutFile "SoundRelay-Setup-v2.2.1.exe"
 InstallDir "$LOCALAPPDATA\Programs\AirBridge"
 InstallDirRegKey HKCU "Software\AirBridge" "InstallDir"
 RequestExecutionLevel user
-BrandingText "声音接力 SoundRelay 2.2.0"
+BrandingText "声音接力 SoundRelay 2.2.1"
 
-VIProductVersion "2.2.0.0"
+VIProductVersion "2.2.1.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
@@ -147,31 +147,54 @@ Section "声音接力虚拟音频设备驱动（测试签名）" SEC_DRIVER
     SetOutPath "$INSTDIR\driver\cert"
     File "${DRV_STAGE}\driver-test-cert.cer"
 
-    ; §3.2 Secure Boot check — exit code 42 means Confirm-SecureBootUEFI
-    ; returned True: explain, skip the rest of this component, do NOT abort
-    ; the whole install. (UNKNOWN/legacy BIOS -> exit 0 -> continue, same
-    ;口径 as driver\一键安装.bat.)
-    nsExec::ExecToStack 'powershell -NoProfile -Command "try { if (Confirm-SecureBootUEFI) { exit 42 } else { exit 0 } } catch { exit 0 }"'
-    Pop $0
-    Pop $1
-    DetailPrint "Secure Boot 检测退出码: $0"
-    ${If} $0 == 42
+    ; §3.2 Secure Boot pre-check (v2.2.1, FB-1): read the registry state
+    ; value UEFISecureBootEnabled — readable WITHOUT elevation. The v2.2
+    ; check ran Confirm-SecureBootUEFI from this unelevated installer; that
+    ; cmdlet throws "access denied" for non-admins, the catch turned it into
+    ; "not enabled", and the install ran on into a bare bcdedit failure
+    ; (exit 13) with no guidance. Value 1 = Secure Boot ON: explain with
+    ; concrete BIOS steps, skip this component, do NOT abort the install.
+    ; Key/value absent (legacy BIOS) -> unknown -> continue; the elevated
+    ; install-driver.ps1 re-checks (registry + Confirm-SecureBootUEFI) and
+    ; exits 42 if it still finds Secure Boot on.
+    StrCpy $0 0
+    ClearErrors
+    ReadRegDWORD $0 HKLM "SYSTEM\CurrentControlSet\Control\SecureBoot\State" "UEFISecureBootEnabled"
+    ${If} ${Errors}
+        StrCpy $0 0
+        ClearErrors
+    ${EndIf}
+    DetailPrint "Secure Boot 注册表状态 (UEFISecureBootEnabled): $0"
+    ${If} $0 == 1
         StrCpy $DriverState 2
-        MessageBox MB_OK|MB_ICONEXCLAMATION "检测到 Secure Boot 处于开启状态，Windows 无法加载测试签名驱动。$\r$\n$\r$\n本次已跳过驱动安装，主程序不受影响（App 会自动回退 VB-CABLE）。$\r$\n如需安装驱动：请先重启进入 BIOS/UEFI 关闭 Secure Boot，再重新运行本安装程序并保持驱动组件勾选。"
+        MessageBox MB_OK|MB_ICONEXCLAMATION "检测到 Secure Boot 处于开启状态，Windows 无法开启测试模式、也就无法加载测试签名驱动。$\r$\n$\r$\n本次已跳过驱动安装，主程序不受影响（App 会自动回退 VB-CABLE）。$\r$\n$\r$\n如需安装驱动，请先关闭 Secure Boot：$\r$\n1) 重启电脑，开机时反复按 Del / F2 / F12 / Esc 进入 BIOS/UEFI 设置（品牌机也可在 Windows 里：设置 → 系统 → 恢复 → 高级启动 → 立即重启 → 疑难解答 → UEFI 固件设置）；$\r$\n2) 在 Security 或 Boot 页找到 Secure Boot，改为 Disabled；$\r$\n3) 保存并退出（通常按 F10）；$\r$\n4) 回到 Windows 后重新运行本安装程序，保持驱动组件勾选即可。"
         Goto driver_done
     ${EndIf}
 
     ; §3.3–3.5 privileged steps via the bundled elevated helper
-    ; (certutil Root+TrustedPublisher, bcdedit testsigning on, HKLM RunOnce).
-    ; The helper checks every step and exits non-zero on any failure.
+    ; (Secure Boot re-check, certutil Root+TrustedPublisher, bcdedit
+    ; testsigning on, HKLM RunOnce). The helper checks every step and exits
+    ; non-zero on any failure; its full command output is in the log.
     DetailPrint "正在请求管理员权限执行驱动特权步骤（导入证书 / 开启测试模式 / 写入续装项）…"
     nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\driver\elevate.ps1" -Target install-driver.ps1'
     Pop $0
     Pop $1
     DetailPrint "驱动特权步骤输出: $1"
+    ${If} $0 == 42
+        ; Elevated re-check found Secure Boot ON (pre-check missed it).
+        StrCpy $DriverState 2
+        MessageBox MB_OK|MB_ICONEXCLAMATION "检测到 Secure Boot 处于开启状态，Windows 无法开启测试模式、也就无法加载测试签名驱动。$\r$\n$\r$\n本次已跳过驱动安装，主程序不受影响（App 会自动回退 VB-CABLE）。$\r$\n$\r$\n如需安装驱动，请先关闭 Secure Boot：$\r$\n1) 重启电脑，开机时反复按 Del / F2 / F12 / Esc 进入 BIOS/UEFI 设置（品牌机也可在 Windows 里：设置 → 系统 → 恢复 → 高级启动 → 立即重启 → 疑难解答 → UEFI 固件设置）；$\r$\n2) 在 Security 或 Boot 页找到 Secure Boot，改为 Disabled；$\r$\n3) 保存并退出（通常按 F10）；$\r$\n4) 回到 Windows 后重新运行本安装程序，保持驱动组件勾选即可。"
+        Goto driver_done
+    ${EndIf}
+    ${If} $0 == 21
+        ; elevate.ps1: the UAC prompt itself was declined / could not start.
+        StrCpy $DriverState 2
+        MessageBox MB_OK|MB_ICONEXCLAMATION "管理员授权（UAC）未通过，驱动组件的特权步骤没有执行。$\r$\n$\r$\n主程序已正常安装，App 会自动回退 VB-CABLE，不影响使用。$\r$\n如需安装驱动：重新运行本安装程序，只勾选驱动组件，并在弹出的 UAC 窗口点「是」。"
+        Goto driver_done
+    ${EndIf}
     ${If} $0 != 0
         StrCpy $DriverState 2
-        MessageBox MB_OK|MB_ICONSTOP "驱动组件安装未完成：特权步骤执行失败（退出码 $0）——证书导入、开启测试模式、写入续装项中有一步未成功，或 UAC 被取消。$\r$\n$\r$\n主程序已正常安装，App 会自动回退 VB-CABLE，不影响使用。$\r$\n详情见 $INSTDIR\driver\install-driver.log；排除原因后可重新运行安装程序、只勾选驱动组件重试。"
+        MessageBox MB_OK|MB_ICONSTOP "驱动组件安装未完成（退出码 $0）。安装驱动需要依次完成：导入测试证书 → 开启 Windows 测试模式 → 写入重启续装项，其中一步没有成功。$\r$\n$\r$\n你可以这样排查：$\r$\n1) 确认 Secure Boot 已关闭（开启时 Windows 会直接拒绝测试模式）；$\r$\n2) UAC 弹窗出现时点「是」；$\r$\n3) 打开日志看具体卡在哪一步：$INSTDIR\driver\install-driver.log（里面有每条命令的完整输出）。$\r$\n$\r$\n主程序已正常安装，App 会自动回退 VB-CABLE，不影响使用。排除原因后重新运行安装程序、只勾选驱动组件即可重试。"
         Goto driver_done
     ${EndIf}
     DetailPrint "驱动特权步骤完成：证书已导入、测试模式已开启、续装项已写入（重启后自动继续）。"

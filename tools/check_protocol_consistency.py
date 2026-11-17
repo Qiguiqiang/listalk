@@ -255,7 +255,7 @@ def main():
         ok("AudioEngine live path wired: echoProcessor.processCapture/pushPlayback + loopGuard.checkIncoming/pushSentMic")
     else:
         fail(f"AudioEngine live-path wiring incomplete: {wiring}")
-    for side, fname in [("android", "PhoneAudioBridge-v2.2-debug.apk"), ("windows", "SoundRelay-Setup-v2.2.exe")]:
+    for side, fname in [("android", "SoundRelay-Android-v2.2.1.apk"), ("windows", "SoundRelay-Setup-v2.2.1.exe")]:
         fpath = os.path.join(ROOT, "releases", fname)
         entry = rel_manifest.get(side, {})
         if not os.path.exists(fpath):

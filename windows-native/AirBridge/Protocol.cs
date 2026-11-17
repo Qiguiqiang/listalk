@@ -13,7 +13,7 @@ public static class Protocol
 {
     public const int Port = 47731;
     /// <summary>Unified release versioning (Gray's rule): one release = same version both ends.</summary>
-    public const string AppVersion = "2.2.0";
+    public const string AppVersion = "2.2.1";
     public const int ProtoVersion = 2;
     public const ushort Magic = 0x5041;
     public const int HeaderSize = 16;

@@ -184,16 +184,29 @@ public sealed class AudioService : IDisposable
     {
         var inputs = new List<AudioDeviceInfo>();
         var outputs = new List<AudioDeviceInfo>();
-        using var en = new MMDeviceEnumerator();
-        string defIn = "", defOut = "";
-        try { defIn = en.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia).ID; } catch { }
-        try { defOut = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID; } catch { }
-        foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
-            inputs.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName, IsLoopback = false, Score = DeviceScoring.InputScore(d.FriendlyName), IsDefault = d.ID == defIn });
-        foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        // FB-2 hardening: MMDevice COM enumeration is an external-service
+        // dependency called synchronously during window construction. If it
+        // throws (Windows Audio service stopped, COM failure, stack left in
+        // a bad state by a driver install), return what we have (possibly
+        // empty) instead of propagating into the startup path.
+        try
         {
-            outputs.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName, IsLoopback = false, Score = DeviceScoring.OutputScore(d.FriendlyName), IsDefault = d.ID == defOut });
-            inputs.Add(new AudioDeviceInfo { Id = "loopback:" + d.ID, Name = d.FriendlyName + Loc.T("（环回）", " (Loopback)"), IsLoopback = true, Score = DeviceScoring.InputScore(d.FriendlyName + " loopback"), IsDefault = false });
+            using var en = new MMDeviceEnumerator();
+            string defIn = "", defOut = "";
+            try { defIn = en.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia).ID; } catch { }
+            try { defOut = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID; } catch { }
+            foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+                inputs.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName, IsLoopback = false, Score = DeviceScoring.InputScore(d.FriendlyName), IsDefault = d.ID == defIn });
+            foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            {
+                outputs.Add(new AudioDeviceInfo { Id = d.ID, Name = d.FriendlyName, IsLoopback = false, Score = DeviceScoring.OutputScore(d.FriendlyName), IsDefault = d.ID == defOut });
+                inputs.Add(new AudioDeviceInfo { Id = "loopback:" + d.ID, Name = d.FriendlyName + Loc.T("（环回）", " (Loopback)"), IsLoopback = true, Score = DeviceScoring.InputScore(d.FriendlyName + " loopback"), IsDefault = false });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log?.Invoke($"[设备] 音频设备枚举失败：{ex.Message}");
+            StartupLog.Error("AudioService.Enumerate", ex);
         }
         return (inputs, outputs);
     }

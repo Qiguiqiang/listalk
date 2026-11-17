@@ -143,7 +143,7 @@ public static class Loc
         ["网络变差时自动降低采样率保流畅，恢复后自动升回"] = "Lowers the sample rate automatically when the network degrades, and raises it again when it recovers",
         ["声音接力虚拟音频设备"] = "SoundRelay Virtual Audio Device",
         ["自动检查更新"] = "Check for updates automatically",
-        ["当前版本 v2.2.0 · 发现新版本时在侧边栏提醒"] = "Current version v2.2.0 · New versions are flagged in the sidebar",
+        ["当前版本 v2.2.1 · 发现新版本时在侧边栏提醒"] = "Current version v2.2.1 · New versions are flagged in the sidebar",
         ["检查更新"] = "Check for updates",
         ["更新地址"] = "Update URL",
         ["更新包来源；将来可改为你自己的服务器"] = "Where update packages come from; can point to your own server later",

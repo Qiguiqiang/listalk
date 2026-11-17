@@ -15,7 +15,7 @@
     <AssemblyName>AirBridge</AssemblyName>
     <RootNamespace>AirBridge</RootNamespace>
     <Product>声音接力 SoundRelay</Product>
-    <Version>2.2.0</Version>
+    <Version>2.2.1</Version>
     <Company>Gray</Company>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>

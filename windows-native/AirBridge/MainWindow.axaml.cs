@@ -75,11 +75,13 @@ public partial class MainWindow : Window
         if (_config.EnsureIdentity()) _config.Save();
         if (_config.EnsurePairCode()) _config.Save();
         _settings = AppSettings.Load();
+        StartupLog.Stage("MainWindow: config + settings loaded");
         _engine = new BridgeEngine(_config, _settings);
         _audio = new AudioService(_engine);
         _mdns = new MdnsDiscovery(_engine);
 
         InitializeComponent();
+        StartupLog.Stage("MainWindow: XAML loaded");
         Title = "声音接力 SoundRelay";
         try { Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://AirBridge/airbridge.ico"))); } catch { }
 
@@ -89,13 +91,24 @@ public partial class MainWindow : Window
         _ble.Log += msg => Dispatcher.UIThread.Post(() => AppendLog(msg));
 
         SetupTray();
+        StartupLog.Stage("MainWindow: tray ready");
         InitControls();
         Loc.ApplyTo(this); // static XAML strings -> system UI language (no-op for zh)
         _uiReady = true;
+        StartupLog.Stage("MainWindow: controls ready");
 
         // Background-first: engine, discovery and audio start immediately and keep
         // running in the tray when the window is closed-to-tray.
-        _engine.Start();
+        // FB-2 hardening: each subsystem start is individually guarded — a
+        // UDP bind conflict (e.g. a previous version still holding the port)
+        // or a broken audio stack must degrade to the in-app "service not
+        // running" state, never kill the window before it appears.
+        try { _engine.Start(); StartupLog.Stage("MainWindow: bridge engine started"); }
+        catch (Exception ex)
+        {
+            StartupLog.Error("BridgeEngine.Start", ex);
+            AppendLog($"[服务] 桥接服务启动失败：{ex.Message}（启动日志见 %LOCALAPPDATA%\\AirBridge\\logs\\startup.log）");
+        }
         _mdns.Start();
         _ble.Start(_config);
         StartAudioFromSelection();
@@ -107,7 +120,10 @@ public partial class MainWindow : Window
         var meterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         meterTimer.Tick += (_, _) => PollMeters();
         meterTimer.Start();
-        Poll();
+        try { Poll(); StartupLog.Stage("MainWindow: first poll done"); }
+        catch (Exception ex) { StartupLog.Error("first Poll", ex); }
+        StartupLog.StartupCompleted = true;
+        StartupLog.Stage("MainWindow: startup complete");
 
         // Online update: background check a few seconds after startup, non-blocking;
         // the user is only prompted when a newer version actually exists.
@@ -300,16 +316,28 @@ public partial class MainWindow : Window
     // ---------------- audio device pickers ----------------
     private void RefreshDeviceCombos()
     {
-        var (inputs, outputs) = _audio.Enumerate();
-        _inputDevices = inputs;
-        _outputDevices = outputs;
-        _selOutput = _audio.PickOutput(outputs, _config.OutputDeviceId);
-        // auto-pick never lands on the capture twin of the mic device (5b)
-        _selInput = _audio.PickInput(inputs, _config.InputDeviceId, _selOutput);
-        UpdatePickerButtons();
-        BuildPickerLists();
-        UpdateDeviceBadges();
-        UpdateVdevStatus();
+        // FB-2 hardening: this runs synchronously in the constructor path
+        // (InitControls) on top of COM audio enumeration — if that throws
+        // (audio service down, stack disturbed by a driver install), the
+        // window must still appear with an empty device list, not die.
+        try
+        {
+            var (inputs, outputs) = _audio.Enumerate();
+            _inputDevices = inputs;
+            _outputDevices = outputs;
+            _selOutput = _audio.PickOutput(outputs, _config.OutputDeviceId);
+            // auto-pick never lands on the capture twin of the mic device (5b)
+            _selInput = _audio.PickInput(inputs, _config.InputDeviceId, _selOutput);
+            UpdatePickerButtons();
+            BuildPickerLists();
+            UpdateDeviceBadges();
+            UpdateVdevStatus();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Error("RefreshDeviceCombos", ex);
+            AppendLog($"[设备] 设备列表刷新失败：{ex.Message}");
+        }
     }
 
     private void UpdatePickerButtons()
