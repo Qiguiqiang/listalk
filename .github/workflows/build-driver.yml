@@ -43,13 +43,50 @@ jobs:
       # newest WDK line targets VS 2026 instead). Same winget package id
       # family Microsoft's own driver repos use in CI
       # (Microsoft.WindowsWDK.10.0.*).
-      - name: Install WDK 10.0.26100 (winget)
+      - name: Install WDK 10.0.26100 (winget, wdksetup fallback)
         shell: pwsh
         run: |
-          winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --silent `
-            --accept-package-agreements --accept-source-agreements `
-            --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { throw "winget WDK install failed (exit $LASTEXITCODE)" }
+          # The windows-2022 image ships winget as an app-execution alias
+          # at %LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe, and that
+          # folder is not on PATH in the pwsh session Actions starts, so a
+          # bare `winget` dies with "The term 'winget' is not recognized".
+          # Prepend WindowsApps to PATH and resolve the full path first.
+          $windowsApps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+          $env:PATH = "$windowsApps;$env:PATH"
+          $winget = (Get-Command winget -ErrorAction SilentlyContinue).Source
+          if (-not $winget) {
+            $candidate = Join-Path $windowsApps 'winget.exe'
+            if (Test-Path $candidate) { $winget = $candidate }
+          }
+
+          $installed = $false
+          if ($winget) {
+            Write-Host "winget: $winget"
+            & $winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --silent `
+              --accept-package-agreements --accept-source-agreements `
+              --disable-interactivity
+            if ($LASTEXITCODE -eq 0) { $installed = $true }
+            else { Write-Host "winget WDK install failed (exit $LASTEXITCODE); falling back to wdksetup.exe" }
+          } else {
+            Write-Host 'winget not found on this runner; falling back to wdksetup.exe'
+          }
+
+          if (-not $installed) {
+            # Fallback: standalone WDK installer. The URL is the
+            # go.microsoft.com fwlink that Microsoft Learn's "Supported
+            # and other WDK download versions" page (other-wdk-downloads)
+            # lists in the WDK column of the "Windows 11 25H2 |
+            # 26100.6584 | VS 2022" row; it serves wdksetup.exe for
+            # WDK 10.0.26100.
+            $wdkUrl = 'https://go.microsoft.com/fwlink/?linkid=2335869'
+            $wdkSetup = Join-Path $env:RUNNER_TEMP 'wdksetup.exe'
+            Write-Host "Downloading WDK installer: $wdkUrl"
+            Invoke-WebRequest -Uri $wdkUrl -OutFile $wdkSetup
+            $p = Start-Process $wdkSetup -ArgumentList @('/quiet', '/norestart') -Wait -PassThru
+            Write-Host "wdksetup exit code: $($p.ExitCode)"
+            # 0 = success, 3010 = success but reboot requested (fine here).
+            if ($p.ExitCode -notin @(0, 3010)) { throw "WDK install failed: winget unavailable/failed and wdksetup.exe exited $($p.ExitCode)" }
+          }
 
       # Since VS 2022 17.11 the WDK Visual Studio extension (the
       # WindowsKernelModeDriver10.0 platform toolset the .vcxproj files
