@@ -1,0 +1,226 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- The setters below reference the design tokens via StaticResource
+             and evaluate while this Styles object is populated (during
+             App.Initialize, before Application.Resources exists). The tokens
+             must therefore live in this resource scope too — Tokens.axaml is
+             the single source, merged here and in App.axaml. -->
+        <ResourceInclude Source="avares://AirBridge/Tokens.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    <!-- Line icons (24 viewBox, stroke style) traced from the prototype's inline SVGs -->
+    <StreamGeometry x:Key="IconPhone">M9.75,2.5 L14.25,2.5 A2.5,2.5 0 0 1 16.75,5 L16.75,19 A2.5,2.5 0 0 1 14.25,21.5 L9.75,21.5 A2.5,2.5 0 0 1 7.25,19 L7.25,5 A2.5,2.5 0 0 1 9.75,2.5 Z M10.5,5 L13.5,5</StreamGeometry>
+    <StreamGeometry x:Key="IconGear">M19,12 A7,7 0 0 0 18.86,10.6 L20.86,9.05 L18.86,5.59 L16.5,6.54 A7,7 0 0 0 14.1,5.1 L13.7,2.6 L10.3,2.6 L9.9,5.1 A7,7 0 0 0 7.5,6.54 L5.14,5.59 L3.14,9.05 L5.14,10.6 A7,7 0 0 0 5.14,13.4 L3.14,14.95 L5.14,18.41 L7.5,17.46 A7,7 0 0 0 9.9,18.9 L10.3,21.4 L13.7,21.4 L14.1,18.9 A7,7 0 0 0 16.5,17.46 L18.86,18.41 L20.86,14.95 L18.86,13.4 A7,7 0 0 0 19,12 Z M8.8,12 A3.2,3.2 0 1 1 15.2,12 A3.2,3.2 0 1 1 8.8,12 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconDownload">M12,3 L12,14 M12,14 L16,10 M12,14 L8,10 M4,17 L4,19.5 A1.5,1.5 0 0 0 5.5,21 L18.5,21 A1.5,1.5 0 0 0 20,19.5 L20,17</StreamGeometry>
+    <StreamGeometry x:Key="IconInfo">M12,2.8 A9.2,9.2 0 1 1 11.9,2.8 M12,11 L12,16.4 M12,7.8 L12.01,7.8</StreamGeometry>
+    <StreamGeometry x:Key="IconMic">M9,6 A3,3 0 0 1 12,3 A3,3 0 0 1 15,6 L15,11 A3,3 0 0 1 12,14 A3,3 0 0 1 9,11 Z M5.5,11.5 A6.5,6.5 0 0 0 18.5,11.5 M12,18 L12,21</StreamGeometry>
+    <StreamGeometry x:Key="IconSpeaker">M4,9.5 L4,14.5 L7.5,14.5 L12,18.5 L12,5.5 L7.5,9.5 Z M15.5,9.5 A4,4 0 0 1 15.5,14.5 M18,7 A7.5,7.5 0 0 1 18,17</StreamGeometry>
+    <StreamGeometry x:Key="IconChevron">M2.5,4.5 L6,8 L9.5,4.5</StreamGeometry>
+    <StreamGeometry x:Key="IconTablet">M7,4 L17,4 A2,2 0 0 1 19,6 L19,18 A2,2 0 0 1 17,20 L7,20 A2,2 0 0 1 5,18 L5,6 A2,2 0 0 1 7,4 Z M10,17.5 L14,17.5</StreamGeometry>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- ===== text ===== -->
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="Consolas, JetBrains Mono"/>
+  </Style>
+  <Style Selector="TextBlock.eyebrow">
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text3}"/>
+  </Style>
+  <Style Selector="TextBlock.h19">
+    <Setter Property="FontSize" Value="19"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="TextBlock.cardt">
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="TextBlock.t135">
+    <Setter Property="FontSize" Value="13.5"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="TextBlock.desc">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+  </Style>
+  <Style Selector="TextBlock.desc115">
+    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+  </Style>
+  <Style Selector="TextBlock.grouphead">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text3}"/>
+  </Style>
+  <Style Selector="Path.icon">
+    <Setter Property="StrokeThickness" Value="1.8"/>
+    <Setter Property="Stretch" Value="Uniform"/>
+    <Setter Property="StrokeLineCap" Value="Round"/>
+    <Setter Property="StrokeJoin" Value="Round"/>
+  </Style>
+
+  <!-- ===== buttons ===== -->
+  <Style Selector="Button.btn">
+    <Setter Property="Background" Value="{StaticResource SurfaceHi}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="18,9"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button.btn:pointerover /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource StrokeHi}"/>
+  </Style>
+  <Style Selector="Button.btn.pri">
+    <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{StaticResource OnAccent}"/>
+  </Style>
+  <Style Selector="Button.btn.ghost">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.btn.sm">
+    <Setter Property="Padding" Value="14,7"/>
+    <Setter Property="FontSize" Value="12.5"/>
+  </Style>
+  <Style Selector="Button.btn.disc">
+    <Setter Property="Background" Value="{StaticResource ErrorDim}"/>
+    <Setter Property="Foreground" Value="{StaticResource Error}"/>
+    <Setter Property="BorderBrush" Value="#66FF5C5C"/>
+    <Setter Property="CornerRadius" Value="11"/>
+    <Setter Property="Padding" Value="18,10"/>
+  </Style>
+  <Style Selector="Button.btn.disc:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#46232A"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Error}"/>
+  </Style>
+  <!-- sidebar nav -->
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="Padding" Value="10,8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+    <Setter Property="FontSize" Value="13.5"/>
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource Surface}"/>
+    <Setter Property="TextElement.Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="Button.nav.on">
+    <Setter Property="Background" Value="{StaticResource SurfaceHi}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <!-- window controls -->
+  <Style Selector="Button.wctl">
+    <Setter Property="Width" Value="46"/>
+    <Setter Property="Height" Value="40"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button.wctl:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#1E2836"/>
+    <Setter Property="TextElement.Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="Button.wctl.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource CloseHover}"/>
+    <Setter Property="TextElement.Foreground" Value="White"/>
+  </Style>
+  <!-- device picker flyout items -->
+  <Style Selector="Button.pickitem">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="7"/>
+    <Setter Property="Padding" Value="10,8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+    <Setter Property="FontSize" Value="12.5"/>
+  </Style>
+  <Style Selector="Button.pickitem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHi}"/>
+    <Setter Property="TextElement.Foreground" Value="{StaticResource Text1}"/>
+  </Style>
+  <Style Selector="Button.pickitem.sel">
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="Button.pickitem:disabled">
+    <Setter Property="Opacity" Value="0.55"/>
+  </Style>
+  <Style Selector="FlyoutPresenter">
+    <Setter Property="Background" Value="{StaticResource MenuBg}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource StrokeHi}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="11"/>
+    <Setter Property="Padding" Value="5"/>
+  </Style>
+
+  <!-- ===== containers ===== -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource Surface}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="14"/>
+  </Style>
+  <Style Selector="Border.hero">
+    <Setter Property="Background" Value="{StaticResource HeroGradient}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource StrokeHi}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="16"/>
+  </Style>
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{StaticResource SurfaceIn}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="999"/>
+    <Setter Property="Padding" Value="11,4"/>
+  </Style>
+  <Style Selector="Border.icoblock">
+    <Setter Property="Background" Value="{StaticResource SurfaceIn}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+
+  <!-- ===== inputs ===== -->
+  <Style Selector="TextBox.mono-input">
+    <Setter Property="Background" Value="{StaticResource SurfaceIn}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="FontFamily" Value="Consolas, JetBrains Mono"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
+    <Setter Property="Padding" Value="11,8"/>
+  </Style>
+  <Style Selector="TextBox.logbox">
+    <Setter Property="Background" Value="{StaticResource SurfaceIn}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="FontFamily" Value="Consolas, JetBrains Mono"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+  </Style>
+  <Style Selector="Slider.volslider">
+    <Setter Property="Foreground" Value="{StaticResource Sky}"/>
+  </Style>
+</Styles>

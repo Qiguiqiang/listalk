@@ -1,0 +1,60 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Design tokens — UI_SPEC.md §2.1 / UI_SPEC_DESKTOP.md §2. Names mirror the tokens;
+       no control may hard-code a colour outside this dictionary (code-drawn controls
+       resolve these same keys at runtime).
+
+       This dictionary is the SINGLE source for the tokens and is merged in two
+       places (see App.axaml / Styles.axaml): Styles.axaml's StaticResource
+       setters evaluate while Application.Styles is being populated — before
+       Application.Resources exists — so the styles must carry the tokens in
+       their own resource scope. MainWindow resolves the same keys through
+       Application.Resources. Keys/values must stay identical to the original
+       App.axaml definitions. -->
+  <SolidColorBrush x:Key="Bg" Color="#0B0E13"/>
+  <SolidColorBrush x:Key="BgTop" Color="#0E131A"/>
+  <SolidColorBrush x:Key="SidebarBg" Color="#0D1118"/>
+  <SolidColorBrush x:Key="Surface" Color="#151B24"/>
+  <SolidColorBrush x:Key="SurfaceHi" Color="#1C2531"/>
+  <SolidColorBrush x:Key="SurfaceIn" Color="#0F141C"/>
+  <SolidColorBrush x:Key="Stroke" Color="#26303F"/>
+  <SolidColorBrush x:Key="StrokeHi" Color="#334155"/>
+  <SolidColorBrush x:Key="Accent" Color="#2CE8A5"/>
+  <SolidColorBrush x:Key="AccentEnd" Color="#17B978"/>
+  <SolidColorBrush x:Key="AccentDim" Color="#12362A"/>
+  <SolidColorBrush x:Key="OnAccent" Color="#052417"/>
+  <SolidColorBrush x:Key="Sky" Color="#45C7F2"/>
+  <SolidColorBrush x:Key="SkyDim" Color="#12303F"/>
+  <SolidColorBrush x:Key="Warn" Color="#FFB224"/>
+  <SolidColorBrush x:Key="Error" Color="#FF5C5C"/>
+  <SolidColorBrush x:Key="ErrorDim" Color="#3A1D22"/>
+  <SolidColorBrush x:Key="Text1" Color="#F2F5F9"/>
+  <SolidColorBrush x:Key="Text2" Color="#9AA7B8"/>
+  <SolidColorBrush x:Key="Text3" Color="#5F6D80"/>
+  <SolidColorBrush x:Key="SegOff" Color="#232E3F"/>
+  <SolidColorBrush x:Key="TrackOff" Color="#2A3648"/>
+  <SolidColorBrush x:Key="KnobOff" Color="#8B98AB"/>
+  <SolidColorBrush x:Key="MenuBg" Color="#1A2230"/>
+  <SolidColorBrush x:Key="ModalBg" Color="#141A24"/>
+  <SolidColorBrush x:Key="CloseHover" Color="#E81123"/>
+  <LinearGradientBrush x:Key="AccentGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#2CE8A5"/>
+    <GradientStop Offset="1" Color="#17B978"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="BarGradient" StartPoint="50%,0%" EndPoint="50%,100%">
+    <GradientStop Offset="0" Color="#2CE8A5"/>
+    <GradientStop Offset="1" Color="#45C7F2"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="HeroGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#1C2531"/>
+    <GradientStop Offset="1" Color="#151B24"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="LogoTileGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#182130"/>
+    <GradientStop Offset="1" Color="#0B0E13"/>
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="ProgGradient" StartPoint="0%,50%" EndPoint="100%,50%">
+    <GradientStop Offset="0" Color="#2CE8A5"/>
+    <GradientStop Offset="1" Color="#17B978"/>
+  </LinearGradientBrush>
+</ResourceDictionary>

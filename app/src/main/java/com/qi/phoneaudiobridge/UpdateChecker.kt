@@ -34,7 +34,7 @@ import java.security.MessageDigest
  * URIs are rejected by the installer on API 24+.
  */
 object UpdateChecker {
-    const val APP_VERSION = "2.2.1"
+    const val APP_VERSION = "2.2.2"
     const val DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json"
 
     /**
