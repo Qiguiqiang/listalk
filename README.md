@@ -46,8 +46,8 @@ Your phone's microphone can fan out to several PCs at the same time (a desktop a
 ## Quick start
 
 1. **Download** the latest version from [Releases](https://github.com/Qiguiqiang/soundrelay/releases)
-   - Android: `SoundRelay-Android-v2.2.3.apk` (allow "Install unknown apps" when installing)
-   - Windows: the `SoundRelay-Setup-v2.2.3.exe` installer (not code-signed yet; on first run Windows shows a SmartScreen prompt — choose "More info → Run anyway")
+   - Android: `SoundRelay-Android-v2.2.4.apk` (allow "Install unknown apps" when installing)
+   - Windows: the `SoundRelay-Setup-v2.2.4.exe` installer (not code-signed yet; on first run Windows shows a SmartScreen prompt — choose "More info → Run anyway")
    - Linux: use the Python version in `pc/` (see the scripts under [pc/](pc/))
 2. Connect the phone and the PC to the **same WiFi** (or use a USB cable with adb forwarding), and open the app on both ends
 3. On the phone, tap "Pair a new PC", pick your computer from the nearby list, and confirm the verification code shown on both ends matches
@@ -75,7 +75,7 @@ Repository layout:
 
 ## Project status
 
-A personal open-source project, **under active development**. Current version: v2.2.3. The core pipeline — two-way streaming, echo cancellation, automatic discovery, multiple devices, in-app updates — is complete and covered by local automated tests. Sound quality, audio routing on different phone brands, and roaming behavior across different Mesh routers are still being tested and refined on real devices — reports of your phone model and what you observe are welcome in Issues.
+A personal open-source project, **under active development**. Current version: v2.2.4. The core pipeline — two-way streaming, echo cancellation, automatic discovery, multiple devices, in-app updates — is complete and covered by local automated tests. Sound quality, audio routing on different phone brands, and roaming behavior across different Mesh routers are still being tested and refined on real devices — reports of your phone model and what you observe are welcome in Issues.
 
 PRs are welcome, too: please keep the protocol simple (one phone to many PCs, a single UDP channel). If you change the protocol, read `PROTOCOL.md` first and run `tools/check_protocol_consistency.py`.
 

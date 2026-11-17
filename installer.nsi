@@ -17,7 +17,7 @@ SetCompressor /SOLID lzma
 !include "nsDialogs.nsh"
 
 !define PRODUCT_NAME "声音接力 SoundRelay"
-!define PRODUCT_VERSION "2.2.3"
+!define PRODUCT_VERSION "2.2.4"
 !define PRODUCT_PUBLISHER "Gray"
 !ifndef SRC_DIR
     !define SRC_DIR "windows-native\stage-v22"
@@ -194,7 +194,27 @@ Section "声音接力虚拟音频设备驱动（测试签名）" SEC_DRIVER
     ${EndIf}
     ${If} $0 != 0
         StrCpy $DriverState 2
-        MessageBox MB_OK|MB_ICONSTOP "驱动组件安装未完成（退出码 $0）。安装驱动需要依次完成：导入测试证书 → 开启 Windows 测试模式 → 写入重启续装项，其中一步没有成功。$\r$\n$\r$\n你可以这样排查：$\r$\n1) 确认 Secure Boot 已关闭（开启时 Windows 会直接拒绝测试模式）；$\r$\n2) UAC 弹窗出现时点「是」；$\r$\n3) 打开日志看具体卡在哪一步：$INSTDIR\driver\install-driver.log（里面有每条命令的完整输出）。$\r$\n$\r$\n主程序已正常安装，App 会自动回退 VB-CABLE，不影响使用。排除原因后重新运行安装程序、只勾选驱动组件即可重试。"
+        ; Failure detail (FB-1 follow-up): install-driver.ps1 writes
+        ; install-driver-error.txt on any Fail() — the failing step plus
+        ; the command's own output (last lines). Show it IN this dialog
+        ; instead of only pointing at the log file. The file is UTF-16LE,
+        ; matching this Unicode build's FileRead.
+        StrCpy $R0 ""
+        IfFileExists "$INSTDIR\driver\install-driver-error.txt" 0 drv_no_detail
+            FileOpen $R1 "$INSTDIR\driver\install-driver-error.txt" r
+            ${For} $R2 1 8
+                FileRead $R1 $R3
+                ${If} ${Errors}
+                    ${Break}
+                ${EndIf}
+                StrCpy $R0 "$R0$R3"
+            ${Next}
+            FileClose $R1
+        drv_no_detail:
+        ${If} $R0 != ""
+            StrCpy $R0 "$\r$\n$\r$\n失败详情（命令原始输出，最后几行）：$\r$\n$R0"
+        ${EndIf}
+        MessageBox MB_OK|MB_ICONSTOP "驱动组件安装未完成（退出码 $0）。安装驱动需要依次完成：导入测试证书 → 开启 Windows 测试模式 → 写入重启续装项，其中一步没有成功。$R0$\r$\n$\r$\n你可以这样排查：$\r$\n1) 确认 Secure Boot 已关闭（开启时 Windows 会直接拒绝测试模式）；$\r$\n2) UAC 弹窗出现时点「是」；$\r$\n3) 打开日志看具体卡在哪一步：$INSTDIR\driver\install-driver.log（里面有每条命令的完整输出）。$\r$\n$\r$\n主程序已正常安装，App 会自动回退 VB-CABLE，不影响使用。排除原因后重新运行安装程序、只勾选驱动组件即可重试。"
         Goto driver_done
     ${EndIf}
     DetailPrint "驱动特权步骤完成：证书已导入、测试模式已开启、续装项已写入（重启后自动继续）。"

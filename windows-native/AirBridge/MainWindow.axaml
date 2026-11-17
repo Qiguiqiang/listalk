@@ -105,7 +105,7 @@
                   <Border Name="navAboutBar" Width="3" CornerRadius="1.5" Background="{StaticResource Accent}" Margin="-10,1,7,1" IsVisible="False"/>
                   <Path Grid.Column="1" Classes="icon" Data="{StaticResource IconInfo}" Stroke="{Binding $parent[Button].Foreground}" Width="17" Height="17" VerticalAlignment="Center"/>
                   <TextBlock Grid.Column="2" Text="关于" Margin="11,0,0,0" VerticalAlignment="Center"/>
-                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.2.3" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.2.4" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
                 </Grid>
               </Button>
             </StackPanel>
@@ -123,7 +123,7 @@
               </StackPanel>
             </Border>
             <Grid Margin="6,0,0,0">
-              <TextBlock Name="sideVersion" Text="v2.2.3" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+              <TextBlock Name="sideVersion" Text="v2.2.4" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
               <Button Name="btnSideUpdate" Content="有新版本" FontSize="11" FontWeight="SemiBold"
                       Background="{StaticResource Warn}" Foreground="{StaticResource Bg}"
                       CornerRadius="999" Padding="9,2.5" BorderThickness="0"
@@ -545,7 +545,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="自动检查更新" Classes="t135"/>
-                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.2.3 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.2.4 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
                       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <local:SwitchControl Name="swAutoCheck" Width="38" Height="22" Small="True" VerticalAlignment="Center"/>
@@ -661,7 +661,7 @@
                   <StackPanel Grid.Column="1" Margin="16,0,0,0">
                     <TextBlock Text="声音接力 SoundRelay" Classes="h19"/>
                     <TextBlock Text="让声音在电脑、手机和耳机之间自由接力" Classes="desc" FontSize="12.5" Margin="0,5,0,0"/>
-                    <TextBlock Name="tbAboutVer" Text="版本 v2.2.3 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
+                    <TextBlock Name="tbAboutVer" Text="版本 v2.2.4 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
                   </StackPanel>
                 </Grid>
               </Border>
@@ -721,9 +721,9 @@
             <StackPanel Grid.Column="1" Margin="12,0,0,0">
               <TextBlock Name="modalTitle" Text="发现新版本" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
               <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                <TextBlock Name="modalVerFrom" Text="v2.2.3" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
+                <TextBlock Name="modalVerFrom" Text="v2.2.4" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
                 <TextBlock Text=" → " Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
-                <TextBlock Name="modalVerTo" Text="v2.2.3" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
+                <TextBlock Name="modalVerTo" Text="v2.2.4" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
                 <TextBlock Name="modalVerExtra" Text="" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
               </StackPanel>
             </StackPanel>

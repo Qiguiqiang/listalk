@@ -46,8 +46,8 @@
 ## 快速开始
 
 1. **下载**：到 [Releases](https://github.com/Qiguiqiang/soundrelay/releases) 下载最新版
-   - Android：`SoundRelay-Android-v2.2.3.apk`（安装时请允许「安装未知应用」）
-   - Windows：`SoundRelay-Setup-v2.2.3.exe` 安装包（未做代码签名，首次运行 Windows 会弹 SmartScreen 提示，点「更多信息 → 仍要运行」）
+   - Android：`SoundRelay-Android-v2.2.4.apk`（安装时请允许「安装未知应用」）
+   - Windows：`SoundRelay-Setup-v2.2.4.exe` 安装包（未做代码签名，首次运行 Windows 会弹 SmartScreen 提示，点「更多信息 → 仍要运行」）
    - Linux：用 `pc/` 目录的 Python 版（见 [pc/](pc/) 内脚本）
 2. 手机和电脑连**同一个 WiFi**（或用 USB 线 + adb 转发），两端打开 App
 3. 手机上点「配对新电脑」，在附近列表里点你的电脑，按提示核对两端显示的验证码一致即可
@@ -75,7 +75,7 @@
 
 ## 项目状态
 
-个人开源项目，**积极开发中**。当前版本 v2.2.3。核心链路（双向推流、回声消除、自动发现、多设备、在线更新）已完成并通过本地自动化测试；听感、不同品牌手机的音频路由、各家 Mesh 路由器下的漫游表现等，仍在持续真机实测和打磨中 —— 欢迎在 Issues 里反馈你的机型和现象。
+个人开源项目，**积极开发中**。当前版本 v2.2.4。核心链路（双向推流、回声消除、自动发现、多设备、在线更新）已完成并通过本地自动化测试；听感、不同品牌手机的音频路由、各家 Mesh 路由器下的漫游表现等，仍在持续真机实测和打磨中 —— 欢迎在 Issues 里反馈你的机型和现象。
 
 也欢迎 PR：协议保持简单（一台手机对多台电脑、单 UDP 通道），改协议请先看 `PROTOCOL.md` 并跑 `tools/check_protocol_consistency.py`。
 
