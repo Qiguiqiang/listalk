@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "2.2.2",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.2/SoundRelay-Android-v2.2.2.apk",
-    "sha256": "4c6ac2acebff1e5b4648bc6168dc714ffc97be93b0ad5a7f5de66f9b39f09235",
-    "notes": "v2.2.2（两端同版本）：本版手机端功能与 v2.2.1 一致，仅版本号与电脑端对齐（两端同版本成套发布）；修复集中在电脑端——软件打不开（启动崩溃），详见电脑端说明。 / EN: No functional changes on Android in v2.2.2 — version aligned with the Windows release (both ends ship version-locked); the fix is on the Windows side (startup crash)."
+    "version": "2.2.3",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.3/SoundRelay-Android-v2.2.3.apk",
+    "sha256": "6e12ef151f0563aa3bf8b4bc66b167581f75bd79037c3dd2b1729d8a14b1b076",
+    "notes": "v2.2.3（两端同版本）：【新增】跨网段发现——多网段家庭网络下能扫到其他网段的电脑（已配对网段自动学习，设置里也可手动添加网段）；已配对电脑换网段或换 IP 后自动跟随；设置里的「更新地址」输入框已移除，检查更新恒用内置地址。电脑端另修复窗口按钮重影、回环误停音乐、开关颜色，详见电脑端说明。 / EN: Cross-subnet discovery scanning, paired-PC retargeting across subnets, update-address field removed; Windows side also fixes title-bar ghosting, loop-guard false stops and toggle colors."
   },
   "windows": {
-    "version": "2.2.2",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.2/SoundRelay-Setup-v2.2.2.exe",
-    "sha256": "f1a02352f7a74e5f2f4b7bf4d57550426f585c57bebc57f9653816529596ec40",
-    "notes": "v2.2.2（两端同版本）：【修复】软件打不开——启动时界面资源加载顺序导致崩溃，已将界面设计令牌抽为共享资源字典并修复加载顺序；驱动组件与 v2.2.1 相同，未变更。 / EN: Fixes a startup crash that prevented the app from opening."
+    "version": "2.2.3",
+    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.3/SoundRelay-Setup-v2.2.3.exe",
+    "sha256": "855e82cebc7d489306baeebaa228ad81bb8edc352ab4c848002bf84539581882",
+    "notes": "v2.2.3（两端同版本）：【新增】跨网段发现——家里有多个网段（如 192.168.23.x / .88.x / .99.x）时，手机和电脑能互相扫到（单播探测＋已配对网段自动学习，设置里也可手动添加网段）；【修复】窗口右上角按钮重影（框架自带按钮与自绘按钮叠印）；回环守卫改为分级判定，放音乐时不再误停电脑→手机的声音，真环路仍立即拦截；通道开关开/关颜色恢复为一眼可辨（修复 v2.2.2 代码绘制控件取色失效、显示为品红的问题）；设置里的「更新地址」输入框已移除，检查更新恒用内置地址。驱动组件与 v2.2.2 相同，未变更。 / EN: Cross-subnet discovery scanning, title-bar button ghosting fix, graded loop guard (music no longer cut off), toggle on/off colors fixed, update-address field removed."
   }
 }
