@@ -19,7 +19,11 @@ permissions:
 jobs:
   build-driver:
     name: Build + test-sign driver (Release|x64)
-    runs-on: windows-latest
+    # Pinned to windows-2022: that image ships Visual Studio 2022, which
+    # is the official pairing for WDK 10.0.26100. windows-latest now
+    # carries VS 2026, whose toolset the 26100 DriverKit build tasks do
+    # not load under (MSB4062).
+    runs-on: windows-2022
     timeout-minutes: 90
     env:
       # TEST-ONLY throwaway certificate password. The cert is a self-signed
@@ -49,24 +53,31 @@ jobs:
 
       # Since VS 2022 17.11 the WDK Visual Studio extension (the
       # WindowsKernelModeDriver10.0 platform toolset the .vcxproj files
-      # reference) ships as the VS individual component "Windows Driver
-      # Kit" (Microsoft.VisualStudio.Component.WDK), not inside the WDK
-      # kit installer. Add it via the VS Installer; no-op if present.
+      # reference, plus the Microsoft.DriverKit.Build.Tasks.*.dll MSBuild
+      # tasks) ships as the VS individual component "Windows Driver Kit"
+      # (Microsoft.VisualStudio.Component.WDK), not inside the WDK kit
+      # installer. Add it via the VS Installer; no-op if present.
+      # No continue-on-error: if this component is missing the build
+      # fails later with a cryptic MSB4062, so fail loudly here instead.
       - name: Add VS "Windows Driver Kit" component (driver toolset)
         shell: pwsh
-        continue-on-error: true
         run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -version '[17.0,18.0)' -property installationPath
-          if (-not $vsPath) { throw 'Visual Studio 2022 not found on this runner' }
-          Write-Host "VS: $vsPath"
-          $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere" }
+          $vsPath = & $vswhere -version '[17.0,18.0)' -products * -property installationPath |
+                    Select-Object -First 1
+          if (-not $vsPath) { throw 'Visual Studio 2022 (version [17.0,18.0)) not found on this runner - the windows-2022 image is required' }
+          Write-Host "VS 2022: $vsPath"
+          $setup = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe'
+          if (-not (Test-Path $setup)) { throw "VS Installer setup.exe not found at $setup" }
           $p = Start-Process $setup -ArgumentList @(
             'modify', '--installPath', "`"$vsPath`"",
             '--add', 'Microsoft.VisualStudio.Component.WDK',
             '--quiet', '--norestart'
           ) -Wait -PassThru
           Write-Host "VS Installer modify exit code: $($p.ExitCode)"
+          # 0 = success, 3010 = success but reboot requested (fine here).
+          if ($p.ExitCode -notin @(0, 3010)) { throw "VS Installer modify failed (exit $($p.ExitCode)) - WDK component not installed" }
 
       - name: Verify kit tools (signtool / inf2cat)
         shell: pwsh
@@ -83,6 +94,23 @@ jobs:
           Write-Host "inf2cat : $inf2cat"
           "SIGNTOOL=$signtool" | Out-File $env:GITHUB_ENV -Append
           "INF2CAT=$inf2cat"   | Out-File $env:GITHUB_ENV -Append
+
+      # Guard against the exact first-run failure: msbuild needs the
+      # DriverKit build tasks DLL, which only exists once the VS "Windows
+      # Driver Kit" component above is installed. Check up front and dump
+      # the bin directory so a recurrence is diagnosable from the log.
+      - name: Verify DriverKit build tasks present
+        shell: pwsh
+        run: |
+          $buildBin = 'C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin'
+          $tasks = Get-ChildItem $buildBin -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue
+          if (-not $tasks) {
+            Write-Host "Contents of ${buildBin}:"
+            if (Test-Path $buildBin) { Get-ChildItem $buildBin | Select-Object -ExpandProperty Name }
+            else { Write-Host '(directory does not exist)' }
+            throw "Microsoft.DriverKit.Build.Tasks.*.dll not found in $buildBin - the VS Windows Driver Kit component did not install correctly"
+          }
+          $tasks | ForEach-Object { Write-Host "Found: $($_.FullName)" }
 
       - name: Build driver solution (Release|x64)
         shell: pwsh
