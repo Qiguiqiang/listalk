@@ -1,0 +1,141 @@
+# Build the SoundRelay virtual audio driver (branded Microsoft
+# SimpleAudioSample) on a cloud Windows runner and test-sign it with the
+# repo's throwaway test certificate. Mirrors driver/build-and-sign.bat.
+# Produces artifact "driver-build-output" = the contents of
+# driver/build-output/ that driver/INTEGRATION-IN-SETUP.md expects.
+name: Build virtual audio driver
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'driver/**'
+      - '.github/workflows/build-driver.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-driver:
+    name: Build + test-sign driver (Release|x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      # TEST-ONLY throwaway certificate password. The cert is a self-signed
+      # test cert shipped in this repo on purpose; see
+      # driver/cert/CERT-README.txt. It is NOT a real secret.
+      PFX_PASSWORD: AirBridge-Test-2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # WDK version is pinned to 10.0.26100: the SDK build number must match
+      # the WDK build number, and 26100 is the kit that pairs with the
+      # Visual Studio 2022 preinstalled on GitHub's windows images (the
+      # newest WDK line targets VS 2026 instead). Same winget package id
+      # family Microsoft's own driver repos use in CI
+      # (Microsoft.WindowsWDK.10.0.*).
+      - name: Install WDK 10.0.26100 (winget)
+        shell: pwsh
+        run: |
+          winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --silent `
+            --accept-package-agreements --accept-source-agreements `
+            --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw "winget WDK install failed (exit $LASTEXITCODE)" }
+
+      # Since VS 2022 17.11 the WDK Visual Studio extension (the
+      # WindowsKernelModeDriver10.0 platform toolset the .vcxproj files
+      # reference) ships as the VS individual component "Windows Driver
+      # Kit" (Microsoft.VisualStudio.Component.WDK), not inside the WDK
+      # kit installer. Add it via the VS Installer; no-op if present.
+      - name: Add VS "Windows Driver Kit" component (driver toolset)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -version '[17.0,18.0)' -property installationPath
+          if (-not $vsPath) { throw 'Visual Studio 2022 not found on this runner' }
+          Write-Host "VS: $vsPath"
+          $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $p = Start-Process $setup -ArgumentList @(
+            'modify', '--installPath', "`"$vsPath`"",
+            '--add', 'Microsoft.VisualStudio.Component.WDK',
+            '--quiet', '--norestart'
+          ) -Wait -PassThru
+          Write-Host "VS Installer modify exit code: $($p.ExitCode)"
+
+      - name: Verify kit tools (signtool / inf2cat)
+        shell: pwsh
+        run: |
+          $kitBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+          $ver = Get-ChildItem $kitBin -Directory | Sort-Object Name -Descending |
+                 Where-Object { Test-Path (Join-Path $_.FullName 'x64\signtool.exe') } |
+                 Select-Object -First 1
+          if (-not $ver) { throw "signtool.exe not found under $kitBin - WDK install incomplete" }
+          $signtool = Join-Path $ver.FullName 'x64\signtool.exe'
+          $inf2cat  = Join-Path $ver.FullName 'x86\inf2cat.exe'
+          if (-not (Test-Path $inf2cat)) { throw "inf2cat.exe not found at $inf2cat" }
+          Write-Host "signtool: $signtool"
+          Write-Host "inf2cat : $inf2cat"
+          "SIGNTOOL=$signtool" | Out-File $env:GITHUB_ENV -Append
+          "INF2CAT=$inf2cat"   | Out-File $env:GITHUB_ENV -Append
+
+      - name: Build driver solution (Release|x64)
+        shell: pwsh
+        run: |
+          msbuild driver\src\SimpleAudioSample\SimpleAudioSample.sln `
+            /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
+            /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { throw "msbuild failed (exit $LASTEXITCODE)" }
+
+      # Same order as driver/build-and-sign.bat: sign the .sys first, then
+      # (re)generate the catalog with inf2cat so it hashes the signed .sys,
+      # then sign the catalog.
+      - name: Test-sign .sys and catalog
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem driver\src\SimpleAudioSample -Recurse -Filter 'SimpleAudioSample.inf' |
+                   Where-Object { $_.FullName -match '\\x64\\Release\\' } |
+                   Select-Object -First 1
+          if (-not $pkg) { throw 'SimpleAudioSample.inf not found under an x64\Release folder - check build output layout' }
+          $pkgDir = $pkg.Directory.FullName
+          Write-Host "Driver package dir: $pkgDir"
+          $sys = Join-Path $pkgDir 'simpleaudiosample.sys'
+          if (-not (Test-Path $sys)) { throw ".sys missing in package dir: $sys" }
+          $pfx = Join-Path $PWD 'driver\cert\driver-test-cert.pfx'
+
+          & $env:SIGNTOOL sign /f $pfx /p $env:PFX_PASSWORD /fd sha256 $sys
+          if ($LASTEXITCODE -ne 0) { throw "signtool sign .sys failed (exit $LASTEXITCODE)" }
+
+          & $env:INF2CAT /driver:"$pkgDir" /os:10_X64
+          if ($LASTEXITCODE -ne 0) { throw "inf2cat failed (exit $LASTEXITCODE)" }
+
+          $cat = Join-Path $pkgDir 'SimpleAudioSample.cat'
+          & $env:SIGNTOOL sign /f $pfx /p $env:PFX_PASSWORD /fd sha256 $cat
+          if ($LASTEXITCODE -ne 0) { throw "signtool sign .cat failed (exit $LASTEXITCODE)" }
+
+          "PKG_DIR=$pkgDir" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Stage build-output
+        shell: pwsh
+        run: |
+          $out = 'driver\build-output'
+          if (Test-Path $out) { Remove-Item $out -Recurse -Force }
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item (Join-Path $env:PKG_DIR 'SimpleAudioSample.inf') $out
+          Copy-Item (Join-Path $env:PKG_DIR 'simpleaudiosample.sys') $out
+          Copy-Item (Join-Path $env:PKG_DIR 'SimpleAudioSample.cat') $out
+          Copy-Item driver\cert\driver-test-cert.cer $out
+          Copy-Item driver\cert\driver-test-cert.pfx $out
+          Get-ChildItem $out | Format-Table Name, Length -AutoSize
+
+      - name: Upload driver build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: driver-build-output
+          path: driver/build-output/
+          if-no-files-found: error
