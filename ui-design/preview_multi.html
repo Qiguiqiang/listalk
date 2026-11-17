@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>声桥 AirBridge — 多电脑 · UI 预览</title>
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#151B24; --surface-hi:#1C2531; --surface-in:#0F141C;
+    --stroke:#26303F; --stroke-hi:#334155;
+    --accent:#2CE8A5; --accent-end:#17B978; --accent-dim:#12362A;
+    --sky:#45C7F2; --sky-dim:#12303F;
+    --warn:#FFB224; --error:#FF5C5C; --error-dim:#3A1D22;
+    --text1:#F2F5F9; --text2:#9AA7B8; --text3:#5F6D80; --on-accent:#052417;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{background:#05070A;font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+       display:flex;flex-direction:column;align-items:center;padding:28px 12px 40px;color:var(--text1)}
+  .page-note{color:var(--text3);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:16px}
+  .page-note b{color:var(--text2)}
+
+  /* ---------- phone frame ---------- */
+  .phone{width:390px;height:844px;background:var(--bg);border-radius:44px;overflow:hidden;position:relative;
+         border:1px solid #1E2733;box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 0 10px #0A0D11,0 0 0 11px #232C38;
+         display:flex;flex-direction:column}
+  .phone::before{content:"";position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:340px;height:240px;
+         background:radial-gradient(ellipse at center,rgba(44,232,165,.10),transparent 65%);pointer-events:none}
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#000;border-radius:14px;z-index:5}
+  .statusbar{height:48px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 4px;
+             font-size:13px;font-weight:600;color:var(--text1)}
+  .statusbar .sicons{display:flex;gap:6px;align-items:center;color:var(--text1)}
+  .screen{flex:1;overflow:hidden;padding:12px 20px 14px;display:flex;flex-direction:column;gap:11px;position:relative}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:flex-start;justify-content:space-between}
+  .brand{display:flex;gap:11px;align-items:center}
+  .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#151B24,#0B0E13);
+        border:1px solid var(--stroke);display:flex;align-items:flex-end;justify-content:center;gap:2.5px;padding-bottom:10px}
+  .logo i{width:3.5px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--sky));display:block}
+  .logo i:nth-child(1){height:8px}.logo i:nth-child(2){height:13px}.logo i:nth-child(3){height:18px}
+  .logo i:nth-child(4){height:13px}.logo i:nth-child(5){height:8px}
+  .brand h1{font-size:19px;font-weight:700;letter-spacing:.01em;line-height:1.15}
+  .brand p{font-size:12px;color:var(--text2);margin-top:2px}
+  .conn{display:flex;align-items:center;gap:6px;padding-top:5px;font-size:12.5px;color:var(--accent);font-weight:600;white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.6s ease-in-out infinite;flex:none}
+  .dot.still{animation:none}
+  .dot.grey{background:var(--text3);animation:none}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(44,232,165,.45)}50%{box-shadow:0 0 0 6px rgba(44,232,165,0)}}
+
+  /* ---------- auto-connect banner ---------- */
+  .banner{background:var(--accent-dim);border:1px solid rgba(44,232,165,.35);border-radius:14px;
+          padding:10px 13px;display:flex;align-items:center;gap:9px;font-size:13px;animation:slidein .3s ease-out}
+  @keyframes slidein{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .banner .ck{width:20px;height:20px;border-radius:50%;background:var(--accent);flex:none;
+              display:flex;align-items:center;justify-content:center}
+  .banner b{font-weight:700}
+  .banner .when{color:var(--text2);font-size:12px}
+  .banner .undo{margin-left:auto;color:var(--text1);font-size:12.5px;font-weight:600;opacity:.85;white-space:nowrap}
+
+  /* ---------- overview strip ---------- */
+  .overview{background:var(--surface-in);border:1px solid var(--stroke);border-radius:12px;
+            padding:9px 12px;font-size:12px;color:var(--text2);font-family:ui-monospace,Menlo,monospace;
+            display:flex;justify-content:space-between}
+  .overview b{color:var(--text1);font-weight:600}
+  .overview .g{color:var(--accent)} .overview .s{color:var(--sky)}
+
+  /* ---------- section row ---------- */
+  .secrow{display:flex;justify-content:space-between;align-items:baseline;margin-top:2px}
+  .secrow h2{font-size:13px;font-weight:700;color:var(--text2);letter-spacing:.06em}
+  .secrow .add{font-size:13px;color:var(--sky);font-weight:600}
+
+  /* ---------- device cards ---------- */
+  .dev{background:var(--surface);border:1px solid var(--stroke);border-radius:20px;padding:13px 15px 12px;position:relative}
+  .dev.online{background:var(--surface-hi);border-color:var(--stroke-hi)}
+  .dev.live::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:2px;background:var(--accent)}
+  .dev-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .dev-id{display:flex;gap:10px;align-items:center;min-width:0}
+  .ic{width:32px;height:32px;border-radius:9px;background:var(--surface-in);border:1px solid var(--stroke);
+      display:flex;align-items:center;justify-content:center;flex:none}
+  .dev h3{font-size:16px;font-weight:700;line-height:1.2}
+  .dev .sub{font-size:11.5px;color:var(--text2);margin-top:2px;font-family:ui-monospace,Menlo,monospace}
+  .badge{border-radius:999px;padding:5px 10px;text-align:center;line-height:1.1;flex:none}
+  .badge b{font-size:14.5px;font-weight:700;font-family:ui-monospace,Menlo,monospace}
+  .badge span{display:block;font-size:9.5px;margin-top:1px}
+  .badge.green{background:var(--accent-dim);border:1px solid rgba(44,232,165,.35)}
+  .badge.green b,.badge.green span{color:var(--accent)}
+  .badge.neutral{background:var(--surface-in);border:1px solid var(--stroke)}
+  .badge.neutral b{font-size:11.5px;color:var(--text2);font-family:inherit;font-weight:600}
+  .badge.grey{background:var(--surface-in);border:1px solid var(--stroke)}
+  .badge.grey b{font-size:11.5px;color:var(--text2);font-family:inherit;font-weight:600}
+
+  .auto-note{font-size:11.5px;color:var(--accent);margin-top:8px;display:flex;align-items:center;gap:5px}
+  .auto-note i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:block}
+  .lastseen{font-size:11.5px;color:var(--text3);margin-top:8px;font-family:ui-monospace,Menlo,monospace}
+
+  .divider{height:1px;background:var(--stroke);margin:11px 0 4px}
+  .trow{display:flex;justify-content:space-between;align-items:center;padding:5px 0}
+  .trow .tl{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .trow .tl .td{width:6px;height:6px;border-radius:50%}
+  .switch{width:44px;height:26px;border-radius:999px;position:relative;flex:none;background:#26303F}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .switch.on-mic{background:var(--accent)} .switch.on-spk{background:var(--sky)} .switch.on-auto{background:var(--accent)}
+  .switch.on-mic::after,.switch.on-spk::after,.switch.on-auto::after{left:auto;right:3px}
+  .switch.off::after{background:#8A97A8}
+
+  .vol{display:flex;align-items:center;gap:10px;padding:6px 0 2px}
+  .vol label{font-size:12px;color:var(--text2);white-space:nowrap}
+  .vol .val{font-size:12px;color:var(--text1);font-family:ui-monospace,Menlo,monospace;width:34px;text-align:right}
+  .vol.disabled label,.vol.disabled .val{color:var(--text3)}
+  .track{flex:1;height:5px;border-radius:3px;background:#26303F;position:relative}
+  .track .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--sky)}
+  .track .knob{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;
+               background:#fff;border:4px solid var(--sky)}
+  .vol.disabled .fill{background:var(--text3)} .vol.disabled .knob{border-color:var(--text3)}
+  .mute{width:34px;height:34px;border-radius:10px;background:var(--surface-in);border:1px solid var(--stroke);
+        display:flex;align-items:center;justify-content:center;flex:none}
+
+  .greyed{opacity:.55}
+  .auto-row{display:flex;justify-content:space-between;align-items:center;padding-top:9px;margin-top:9px;border-top:1px solid var(--stroke)}
+  .auto-row .tl{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .auto-row .hint{font-size:11px;color:var(--text3);font-weight:400}
+
+  /* ---------- add / footer ---------- */
+  .addrow{display:flex;gap:10px}
+  .btn-qr{flex:1;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent-end));
+          color:var(--on-accent);font-size:14.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px}
+  .btn-code{flex:1;height:48px;border-radius:14px;background:var(--surface-hi);border:1px solid var(--stroke-hi);
+            color:var(--text1);font-size:14.5px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .foot{text-align:center;font-size:11.5px;color:var(--text3);flex:none}
+  .homebar{width:134px;height:5px;border-radius:3px;background:#3A4453;margin:6px auto 2px;flex:none}
+</style>
+</head>
+<body>
+<div class="page-note">声桥 AirBridge · UI 预览 — <b>多电脑 · 自动连接</b> · 390 × 844</div>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="statusbar">
+    <span>22:52</span>
+    <span class="sicons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1" opacity=".35"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2.5" y="2.5" width="13" height="7" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+
+  <div class="screen">
+    <header>
+      <div class="brand">
+        <div class="logo"><i></i><i></i><i></i><i></i><i></i></div>
+        <div>
+          <h1>声桥 AirBridge</h1>
+          <p>把手机变成电脑的麦克风和扬声器</p>
+        </div>
+      </div>
+      <div class="conn"><span class="dot"></span>1 台推流中</div>
+    </header>
+
+    <!-- AUTO-CONNECT BANNER -->
+    <div class="banner">
+      <span class="ck"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#052417" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg></span>
+      <span><b>已自动连接 QI-PC</b> <span class="when">· 刚刚</span></span>
+      <span class="undo">撤销</span>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="overview"><span class="g">麦克风 → <b>1 台</b></span><span class="s">扬声器 ← <b>1 台混音</b></span><span>丢包 <b>0.3%</b></span></div>
+
+    <div class="secrow"><h2>我的电脑</h2><span class="add">排序：推流中优先</span></div>
+
+    <!-- PC 1 · STREAMING LIVE -->
+    <section class="dev online live">
+      <div class="dev-top">
+        <div class="dev-id">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA7B8" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9.5 20.5h5M12 16.5v4"/></svg></span>
+          <div>
+            <h3>QI-PC</h3>
+            <div class="sub">Windows · 192.168.1.20 · WiFi</div>
+          </div>
+        </div>
+        <div class="badge green"><b>18 ms</b><span>流畅 · LIVE</span></div>
+      </div>
+      <div class="auto-note"><i></i>已自动连接 · 检测到就激活，不用点</div>
+      <div class="divider"></div>
+      <div class="trow"><span class="tl"><span class="td" style="background:var(--accent)"></span>麦克风 → 这台电脑</span><div class="switch on-mic"></div></div>
+      <div class="trow"><span class="tl"><span class="td" style="background:var(--sky)"></span>电脑声音 → 手机扬声器</span><div class="switch on-spk"></div></div>
+      <div class="vol">
+        <label>这台的音量</label>
+        <div class="track"><div class="fill" style="width:70%"></div><div class="knob" style="left:70%"></div></div>
+        <span class="val">70%</span>
+        <span class="mute"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#45C7F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/></svg></span>
+      </div>
+    </section>
+
+    <!-- PC 2 · CONNECTED IDLE -->
+    <section class="dev online">
+      <div class="dev-top">
+        <div class="dev-id">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA7B8" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9.5 20.5h5M12 16.5v4"/></svg></span>
+          <div>
+            <h3>QI-Linux</h3>
+            <div class="sub">Linux · 192.168.1.35 · WiFi</div>
+          </div>
+        </div>
+        <div class="badge neutral"><b>已连接 · 待机</b></div>
+      </div>
+      <div class="divider"></div>
+      <div class="trow"><span class="tl"><span class="td" style="background:var(--accent)"></span>麦克风 → 这台电脑</span><div class="switch on-mic"></div></div>
+      <div class="trow"><span class="tl"><span class="td" style="background:var(--text3)"></span>电脑声音 → 手机扬声器</span><div class="switch off"></div></div>
+      <div class="vol disabled">
+        <label>这台的音量</label>
+        <div class="track"><div class="fill" style="width:40%"></div><div class="knob" style="left:40%"></div></div>
+        <span class="val">40%</span>
+        <span class="mute"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5F6D80" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/></svg></span>
+      </div>
+    </section>
+
+    <!-- PC 3 · PAIRED OFFLINE -->
+    <section class="dev">
+      <div class="greyed">
+        <div class="dev-top">
+          <div class="dev-id">
+            <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA7B8" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9.5 20.5h5M12 16.5v4"/></svg></span>
+            <div>
+              <h3>Studio-PC</h3>
+              <div class="sub">Windows · 上次 192.168.1.51</div>
+            </div>
+          </div>
+          <div class="badge grey"><b>离线</b></div>
+        </div>
+        <div class="lastseen">上次连接 昨天 21:14 · 回到同一 WiFi 会自动连接</div>
+        <div class="divider"></div>
+        <div class="trow"><span class="tl"><span class="td" style="background:var(--text3)"></span>麦克风 → 这台电脑</span><div class="switch on-mic"></div></div>
+        <div class="trow"><span class="tl"><span class="td" style="background:var(--text3)"></span>电脑声音 → 手机扬声器</span><div class="switch on-spk"></div></div>
+      </div>
+      <div class="auto-row">
+        <span class="tl"><span class="td" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:block"></span>自动连接 <span class="hint">离线时也能改</span></span>
+        <div class="switch on-auto"></div>
+      </div>
+    </section>
+
+    <div style="flex:1"></div>
+
+    <!-- ADD -->
+    <div class="addrow">
+      <div class="btn-qr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#052417" stroke-width="2.4" stroke-linecap="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M13.5 13.5h3v3h-3zM17.5 17.5h3v3h-3z"/></svg>扫码配对新电脑</div>
+      <div class="btn-code">输入配对码</div>
+    </div>
+    <div class="foot">已配对的电脑一出现就自动连接激活 · 删除在长按卡片里</div>
+    <div class="homebar"></div>
+  </div>
+</div>
+</body>
+</html>

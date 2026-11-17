@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>声桥 AirBridge — 推流中 · UI 预览</title>
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#151B24; --surface-hi:#1C2531; --surface-in:#0F141C;
+    --stroke:#26303F; --stroke-hi:#334155;
+    --accent:#2CE8A5; --accent-end:#17B978; --accent-dim:#12362A;
+    --sky:#45C7F2; --sky-dim:#12303F;
+    --warn:#FFB224; --error:#FF5C5C; --error-dim:#3A1D22;
+    --text1:#F2F5F9; --text2:#9AA7B8; --text3:#5F6D80; --on-accent:#052417;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{background:#05070A;font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+       display:flex;flex-direction:column;align-items:center;padding:28px 12px 40px;color:var(--text1)}
+  .page-note{color:var(--text3);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:16px}
+  .page-note b{color:var(--text2)}
+
+  /* ---------- phone frame ---------- */
+  .phone{width:390px;height:844px;background:var(--bg);border-radius:44px;overflow:hidden;position:relative;
+         border:1px solid #1E2733;box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 0 10px #0A0D11,0 0 0 11px #232C38;
+         display:flex;flex-direction:column}
+  .phone::before{content:"";position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:340px;height:240px;
+         background:radial-gradient(ellipse at center,rgba(44,232,165,.10),transparent 65%);pointer-events:none}
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#000;border-radius:14px;z-index:5}
+  .statusbar{height:48px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 4px;
+             font-size:13px;font-weight:600;color:var(--text1)}
+  .statusbar .sicons{display:flex;gap:6px;align-items:center;color:var(--text1)}
+  .screen{flex:1;overflow:hidden;padding:14px 20px 18px;display:flex;flex-direction:column;gap:12px;position:relative}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:flex-start;justify-content:space-between}
+  .brand{display:flex;gap:11px;align-items:center}
+  .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#151B24,#0B0E13);
+        border:1px solid var(--stroke);display:flex;align-items:flex-end;justify-content:center;gap:2.5px;padding-bottom:10px}
+  .logo i{width:3.5px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--sky));display:block}
+  .logo i:nth-child(1){height:8px}.logo i:nth-child(2){height:13px}.logo i:nth-child(3){height:18px}
+  .logo i:nth-child(4){height:13px}.logo i:nth-child(5){height:8px}
+  .brand h1{font-size:19px;font-weight:700;letter-spacing:.01em;line-height:1.15}
+  .brand p{font-size:12px;color:var(--text2);margin-top:2px}
+  .conn{display:flex;align-items:center;gap:6px;padding-top:5px;font-size:12.5px;color:var(--accent);font-weight:600}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(44,232,165,.45)}50%{box-shadow:0 0 0 6px rgba(44,232,165,0)}}
+
+  /* ---------- hero ---------- */
+  .hero{background:var(--surface-hi);border:1px solid var(--stroke-hi);border-radius:24px;padding:18px 18px 16px}
+  .hero-top{display:flex;justify-content:space-between;align-items:flex-start}
+  .live{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--accent)}
+  .live .dot{width:7px;height:7px}
+  .hero h2{font-size:20px;font-weight:700;margin-top:9px}
+  .hero .sub{font-size:12.5px;color:var(--text2);margin-top:3px;font-family:ui-monospace,Menlo,monospace}
+  .badge{background:var(--accent-dim);border:1px solid rgba(44,232,165,.35);border-radius:999px;
+         padding:7px 12px;text-align:center;line-height:1.1}
+  .badge b{font-size:19px;font-weight:700;color:var(--accent);font-family:ui-monospace,Menlo,monospace}
+  .badge span{display:block;font-size:10px;color:var(--accent);opacity:.85;margin-top:1px}
+
+  .meter-block{margin-top:16px}
+  .meter-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .meter-head .name{font-size:13.5px;font-weight:600}
+  .meter-head .name em{font-style:normal;color:var(--text3);font-size:10px;font-weight:700;letter-spacing:.16em;margin-left:7px}
+  .meter-head .db{font-size:11.5px;color:var(--text2);font-family:ui-monospace,Menlo,monospace}
+  .meter{display:flex;align-items:flex-end;gap:3px;height:26px;background:var(--surface-in);
+         border:1px solid var(--stroke);border-radius:9px;padding:5px 8px}
+  .meter i{flex:1;border-radius:2px;background:#232D3B;height:35%;transform-origin:bottom;animation:eq 1s ease-in-out infinite alternate}
+  .meter.mic i.on{background:var(--accent)} .meter.spk i.on{background:var(--sky)}
+  .meter i.hot{background:var(--warn)!important}
+  @keyframes eq{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+
+  .chips{display:flex;gap:8px;margin-top:15px}
+  .chip{display:flex;align-items:center;gap:6px;background:var(--surface-in);border:1px solid var(--stroke);
+        border-radius:999px;padding:6px 11px;font-size:12px;color:var(--text1);font-family:ui-monospace,Menlo,monospace}
+  .chip i{width:6px;height:6px;border-radius:50%;background:var(--accent);display:block}
+  .chip.blue i{background:var(--sky)}
+  .stats{margin-top:12px;background:var(--surface-in);border:1px solid var(--stroke);border-radius:12px;
+         padding:9px 12px;font-size:12px;color:var(--text2);font-family:ui-monospace,Menlo,monospace;
+         display:flex;justify-content:space-between}
+  .stats b{color:var(--text1);font-weight:600}
+
+  /* ---------- channel cards ---------- */
+  .card{background:var(--surface);border:1px solid var(--stroke);border-radius:20px;padding:15px 16px}
+  .card.on{background:var(--surface-hi)}
+  .card-top{display:flex;justify-content:space-between;align-items:center}
+  .card h3{font-size:15.5px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic.mic{background:var(--accent-dim)} .ic.spk{background:var(--sky-dim)}
+  .ic svg{display:block}
+  .card .desc{font-size:12.5px;color:var(--text2);margin-top:5px}
+  .card .state{font-size:12px;margin-top:8px;display:flex;align-items:center;gap:6px}
+  .state .sd{width:6px;height:6px;border-radius:50%}
+  .switch{width:48px;height:28px;border-radius:999px;position:relative;flex:none;transition:.2s}
+  .switch::after{content:"";position:absolute;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s}
+  .switch.mic{background:var(--accent)} .switch.mic::after{right:3px}
+  .switch.spk{background:var(--sky)} .switch.spk::after{right:3px}
+  .vol{display:flex;align-items:center;gap:11px;margin-top:12px}
+  .vol label{font-size:12px;color:var(--text2);white-space:nowrap}
+  .vol .val{font-size:12px;color:var(--text1);font-family:ui-monospace,Menlo,monospace;width:36px;text-align:right}
+  .track{flex:1;height:5px;border-radius:3px;background:#26303F;position:relative}
+  .track .fill{position:absolute;left:0;top:0;bottom:0;width:70%;border-radius:3px;background:var(--sky)}
+  .track .knob{position:absolute;left:70%;top:50%;transform:translate(-50%,-50%);width:17px;height:17px;border-radius:50%;
+               background:#fff;border:4px solid var(--sky)}
+
+  /* ---------- primary button / footer ---------- */
+  .btn-stop{height:56px;border-radius:18px;background:var(--error-dim);border:1px solid rgba(255,92,92,.45);
+            color:var(--error);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;flex:none}
+  .btn-stop i{width:9px;height:9px;border-radius:2.5px;background:var(--error);display:block}
+  .foot{text-align:center;font-size:12px;color:var(--text3);flex:none}
+  .foot b{color:var(--text2);font-weight:600;font-family:ui-monospace,Menlo,monospace}
+  .homebar{width:134px;height:5px;border-radius:3px;background:#3A4453;margin:8px auto 2px;flex:none}
+</style>
+</head>
+<body>
+<div class="page-note">声桥 AirBridge · UI 预览 — <b>推流中</b> · 390 × 844</div>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="statusbar">
+    <span>22:44</span>
+    <span class="sicons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1" opacity=".35"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2.5" y="2.5" width="13" height="7" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+
+  <div class="screen">
+    <header>
+      <div class="brand">
+        <div class="logo"><i></i><i></i><i></i><i></i><i></i></div>
+        <div>
+          <h1>声桥 AirBridge</h1>
+          <p>把手机变成电脑的麦克风和扬声器</p>
+        </div>
+      </div>
+      <div class="conn"><span class="dot"></span>推流中</div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="live"><span class="dot"></span>LIVE · 正在推流</div>
+          <h2>QI-PC</h2>
+          <div class="sub">192.168.1.20 · Windows</div>
+        </div>
+        <div class="badge"><b>18 ms</b><span>流畅</span></div>
+      </div>
+
+      <div class="meter-block">
+        <div class="meter-head">
+          <div class="name">麦克风 → 电脑<em>MIC</em></div>
+          <div class="db">-12 dB</div>
+        </div>
+        <div class="meter mic" id="meterMic"></div>
+      </div>
+
+      <div class="meter-block">
+        <div class="meter-head">
+          <div class="name">电脑 → 扬声器<em>SPEAKER</em></div>
+          <div class="db">-18 dB</div>
+        </div>
+        <div class="meter spk" id="meterSpk"></div>
+      </div>
+
+      <div class="chips">
+        <div class="chip"><i></i>48 kHz</div>
+        <div class="chip blue"><i></i>WiFi</div>
+        <div class="chip"><i></i>UDP · 10ms</div>
+      </div>
+      <div class="stats"><span>丢包 <b>0.3%</b></span><span>抖动 <b>2 ms</b></span><span>缓冲 <b>20 ms</b></span></div>
+    </section>
+
+    <!-- CHANNEL 1 -->
+    <section class="card on">
+      <div class="card-top">
+        <h3><span class="ic mic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2CE8A5" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span>麦克风 → 电脑</h3>
+        <div class="switch mic"></div>
+      </div>
+      <p class="desc">你的声音送到电脑，当麦克风用</p>
+      <div class="state" style="color:var(--accent)"><span class="sd" style="background:var(--accent)"></span>正在发送 · 48 kHz</div>
+    </section>
+
+    <!-- CHANNEL 2 -->
+    <section class="card on">
+      <div class="card-top">
+        <h3><span class="ic spk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#45C7F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5M18 7a7.5 7.5 0 0 1 0 10"/></svg></span>电脑 → 扬声器</h3>
+        <div class="switch spk"></div>
+      </div>
+      <p class="desc">电脑的声音从手机播放</p>
+      <div class="state" style="color:var(--sky)"><span class="sd" style="background:var(--sky)"></span>正在播放</div>
+      <div class="vol">
+        <label>播放音量</label>
+        <div class="track"><div class="fill"></div><div class="knob"></div></div>
+        <span class="val">70%</span>
+      </div>
+    </section>
+
+    <div style="flex:1"></div>
+
+    <div class="btn-stop"><i></i>停止推流</div>
+    <div class="foot">已推流 <b>12:34</b> · 断线会自动重连</div>
+    <div class="homebar"></div>
+  </div>
+</div>
+
+<script>
+  // Build 26-segment level meters; heights + animation delays are pseudo-random
+  // but fixed, so the mock reads as a live, breathing meter.
+  function build(id, lit, seed){
+    var el=document.getElementById(id), s=seed;
+    function rnd(){ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }
+    for(var i=0;i<26;i++){
+      var seg=document.createElement('i');
+      var h=30+Math.round(rnd()*65);
+      seg.style.height=h+'%';
+      seg.style.animationDuration=(0.55+rnd()*0.8).toFixed(2)+'s';
+      seg.style.animationDelay=(-rnd()*1.2).toFixed(2)+'s';
+      if(i<lit) seg.className = (i>=22 ? 'hot' : 'on');
+      el.appendChild(seg);
+    }
+  }
+  build('meterMic', 19, 42);
+  build('meterSpk', 14, 137);
+</script>
+</body>
+</html>

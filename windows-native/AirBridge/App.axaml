@@ -1,0 +1,23 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AirBridge.App">
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+  <Application.Resources>
+    <SolidColorBrush x:Key="Bg" Color="#0B0E13"/>
+    <SolidColorBrush x:Key="Surface" Color="#151B24"/>
+    <SolidColorBrush x:Key="SurfaceHi" Color="#1C2531"/>
+    <SolidColorBrush x:Key="SurfaceIn" Color="#0F141C"/>
+    <SolidColorBrush x:Key="Stroke" Color="#26303F"/>
+    <SolidColorBrush x:Key="Accent" Color="#2CE8A5"/>
+    <SolidColorBrush x:Key="AccentDim" Color="#12362A"/>
+    <SolidColorBrush x:Key="Sky" Color="#45C7F2"/>
+    <SolidColorBrush x:Key="Warn" Color="#FFB224"/>
+    <SolidColorBrush x:Key="Error" Color="#FF5C5C"/>
+    <SolidColorBrush x:Key="Text1" Color="#F2F5F9"/>
+    <SolidColorBrush x:Key="Text2" Color="#9AA7B8"/>
+    <SolidColorBrush x:Key="Text3" Color="#5F6D80"/>
+    <SolidColorBrush x:Key="OnAccent" Color="#052417"/>
+  </Application.Resources>
+</Application>

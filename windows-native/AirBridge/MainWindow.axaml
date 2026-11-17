@@ -1,0 +1,171 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AirBridge.MainWindow"
+        Title="声桥 AirBridge"
+        Width="1160" Height="680"
+        MinWidth="940" MinHeight="580"
+        Background="{StaticResource Bg}">
+  <!-- Desktop composition (v2.1, defect 4): left status rail + main
+       content area. Landscape, resizable, standard window chrome. -->
+  <Grid ColumnDefinitions="320,*">
+
+    <!-- ===== Left rail: brand, live status, meters, actions ===== -->
+    <Border Grid.Column="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="声桥 AirBridge" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <TextBlock Name="tvStatus" Grid.Column="1" Text="● 未启动" FontWeight="Bold" Foreground="{StaticResource Text2}" VerticalAlignment="Center"/>
+          </Grid>
+          <TextBlock Text="把电脑变成手机的外接声卡 · 端口 47731" Foreground="{StaticResource Text2}" FontSize="12"/>
+          <TextBlock Name="tvBanner" Text="" Foreground="{StaticResource Accent}" FontSize="13" IsVisible="False"/>
+          <TextBlock Name="tvLoopWarn" Text="" Foreground="{StaticResource Warn}" FontSize="13" TextWrapping="Wrap" IsVisible="False"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+          <Grid ColumnDefinitions="*,*">
+            <Button Name="btnPause" Content="暂停桥接" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+            <Button Name="btnToggleService" Grid.Column="1" Margin="10,0,0,0" Content="停止服务" Background="{StaticResource Accent}" Foreground="{StaticResource OnAccent}" FontWeight="Bold" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+          </Grid>
+          <TextBlock Name="tvDiscoveryStatus" Text="" TextWrapping="Wrap" Foreground="{StaticResource Text3}" FontSize="11"/>
+          <TextBlock Text="服务运行中 · 关闭窗口将最小化到托盘（可在设置里关掉）" Foreground="{StaticResource Text3}" FontSize="11" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16" Margin="0,14,0,14" VerticalAlignment="Top">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Name="tvHeroTitle" Text="等待手机连接" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+              <Border Name="badgeBorder" Grid.Column="1" Background="{StaticResource SurfaceIn}" CornerRadius="999" Padding="10,4">
+                <TextBlock Name="tvBadge" Text="-- ms" FontFamily="Consolas" Foreground="{StaticResource Text2}"/>
+              </Border>
+            </Grid>
+            <TextBlock Name="tvHeroSub" Text="在手机上打开声桥即可自动发现这台电脑" TextWrapping="Wrap" Foreground="{StaticResource Text2}" FontSize="13"/>
+            <Canvas Name="sparkCanvas" Height="56" Background="{StaticResource SurfaceIn}">
+              <Polyline Name="sparkLine" Stroke="{StaticResource Accent}" StrokeThickness="2"/>
+            </Canvas>
+            <TextBlock Text="麦克风 → 电脑  MIC" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Text3}"/>
+            <ProgressBar Name="meterMic" Minimum="0" Maximum="1" Value="0" Height="12" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceIn}"/>
+            <TextBlock Text="电脑 → 手机  SPEAKER" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Text3}"/>
+            <ProgressBar Name="meterSpk" Minimum="0" Maximum="1" Value="0" Height="12" Foreground="{StaticResource Sky}" Background="{StaticResource SurfaceIn}"/>
+            <TextBlock Name="tvStats" Text="丢包 --% · 抖动 -- ms · 缓冲 -- ms" FontFamily="Consolas" Foreground="{StaticResource Text2}" FontSize="12"/>
+            <StackPanel Name="versionWarnPanel" IsVisible="False" Spacing="6">
+              <TextBlock Name="tvVersionWarn" Text="" TextWrapping="Wrap" Foreground="{StaticResource Warn}" FontWeight="Bold"/>
+              <Button Name="btnVersionUpdate" Content="打开更新检查（先更新手机端）" HorizontalAlignment="Left"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </DockPanel>
+    </Border>
+
+    <!-- ===== Main area ===== -->
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Margin="16" Spacing="12">
+
+        <!-- Audio devices -->
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock Text="音频设备" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <Grid ColumnDefinitions="*,*">
+              <StackPanel Spacing="4" Margin="0,0,8,0">
+                <TextBlock Text="手机麦克风输出 →（给其他应用当麦克风）" Foreground="{StaticResource Text2}" FontSize="13"/>
+                <ComboBox Name="comboOutput" HorizontalAlignment="Stretch"/>
+                <TextBlock Name="tvOutBadge" Text="" Foreground="{StaticResource Accent}" FontSize="12"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+                <TextBlock Text="送到手机的声音 ←（采集电脑声音，可选环回）" Foreground="{StaticResource Text2}" FontSize="13"/>
+                <ComboBox Name="comboInput" HorizontalAlignment="Stretch"/>
+                <TextBlock Name="tvInBadge" Text="" Foreground="{StaticResource Accent}" FontSize="12" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="注意：采集源不能包含手机麦克风那一路（同一条虚拟线缆的两端、或麦克风设备的环回），否则手机会听到自己。选到这类源时声桥会警告并阻止发送。" TextWrapping="Wrap" Foreground="{StaticResource Text3}" FontSize="12"/>
+            <Button Name="btnRefreshDevices" Content="刷新设备列表" HorizontalAlignment="Left"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Channels -->
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16">
+          <StackPanel Spacing="4">
+            <TextBlock Text="通道" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <Grid ColumnDefinitions="*,*">
+              <CheckBox Name="cbMic" Content="麦克风 → 电脑（手机当麦克风）" Foreground="{StaticResource Text1}"/>
+              <CheckBox Name="cbSpeaker" Grid.Column="1" Content="电脑 → 手机（电脑声音从手机播放）" Foreground="{StaticResource Text1}"/>
+            </Grid>
+            <TextBlock Text="回声抑制在手机端完成（系统 AEC + 自研 NLMS 参考抵消 + 双讲保护 + 啸叫保护）。" TextWrapping="Wrap" Foreground="{StaticResource Text3}" FontSize="12"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Nearby discovery / add phone (PRIMARY pairing path) -->
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="添加手机（附近发现）" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <TextBlock Text="附近的手机会实时出现在这里（局域网广播 + mDNS 合并去重，约 5 秒无心跳自动消失；已配对的会置顶并标注）。点选一台再点「配对」即可，全程不用输任何东西。" TextWrapping="Wrap" Foreground="{StaticResource Text2}" FontSize="13"/>
+            <ListBox Name="listNearby" Height="132"/>
+            <Button Name="btnPairSelected" Content="配对 / 连接所选手机" Background="{StaticResource Accent}" Foreground="{StaticResource OnAccent}" FontWeight="Bold" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+            <TextBlock Name="tvNearbyHint" Text="" Foreground="{StaticResource Text2}" FontSize="12"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Pairing (secondary: QR + code side by side) + paired list -->
+        <Grid ColumnDefinitions="*,*">
+          <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16" Margin="0,0,6,0">
+            <StackPanel Spacing="6">
+              <TextBlock Text="配对（次选：扫码）" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+              <Image Name="imgQr" Width="170" Height="170" HorizontalAlignment="Left"/>
+              <TextBlock Name="tvVerify" Text="" Foreground="{StaticResource Warn}" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16" Margin="6,0,0,0">
+            <StackPanel Spacing="6">
+              <TextBlock Text="配对（次选：配对码）" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+              <TextBlock Text="配对码" Foreground="{StaticResource Text2}" FontSize="12"/>
+              <TextBlock Name="tvPairCode" Text="------" FontFamily="Consolas" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
+              <TextBlock Name="tvPairCountdown" Text="" Foreground="{StaticResource Text2}" FontSize="12"/>
+              <TextBlock Text="已配对的手机" FontWeight="Bold" Foreground="{StaticResource Text1}" Margin="0,8,0,0"/>
+              <ListBox Name="listPaired" Height="72"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <!-- Settings -->
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="设置" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <Grid ColumnDefinitions="*,*">
+              <StackPanel Spacing="4">
+                <CheckBox Name="cbAutoStart" Content="开机自启（写入当前用户注册表 Run 项）" Foreground="{StaticResource Text1}"/>
+                <CheckBox Name="cbCloseToTray" Content="关闭窗口时最小化到托盘（后台继续发现与桥接）" Foreground="{StaticResource Text1}"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4">
+                <CheckBox Name="cbNotifications" Content="通知（连接状态变化时更新托盘提示）" Foreground="{StaticResource Text1}"/>
+                <CheckBox Name="cbAutoReconnect" Content="允许已配对手机自动重连" Foreground="{StaticResource Text1}"/>
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,*">
+              <StackPanel Spacing="4" Margin="0,0,8,0">
+                <TextBlock Text="采样率偏好" Foreground="{StaticResource Text2}" FontSize="13"/>
+                <ComboBox Name="comboRate" HorizontalAlignment="Stretch"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+                <TextBlock Text="更新地址（update.json）" Foreground="{StaticResource Text2}" FontSize="13"/>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Name="txtUpdateUrl" HorizontalAlignment="Stretch"/>
+                  <Button Name="btnCheckUpdate" Grid.Column="1" Margin="8,0,0,0" Content="检查更新"/>
+                </Grid>
+                <TextBlock Name="tvUpdateStatus" Text="" TextWrapping="Wrap" Foreground="{StaticResource Text2}" FontSize="12"/>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Log -->
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Padding="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="运行日志" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+            <TextBox Name="txtLog" Height="110" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>

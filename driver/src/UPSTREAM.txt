@@ -1,0 +1,15 @@
+Upstream source record
+======================
+Repo    : https://github.com/microsoft/Windows-driver-samples
+Path    : audio/simpleaudiosample
+Commit  : d49bb7d72f3651952b2b6e4ad28d14fe2247eb69 (2026-11-05)
+License : Microsoft Public License (MS-PL) - see repo LICENSE
+
+How this copy was obtained (sparse checkout, reproducible):
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-driver-samples.git wds
+  git -C wds sparse-checkout set audio/sysvad audio/simpleaudiosample
+  cp -r wds/audio/simpleaudiosample  ->  driver/src/SimpleAudioSample
+
+Modifications vs upstream are listed in ../CHANGES.md (2 files only).
+The project has NO dependency on the repo root (no Directory.Build.props,
+no WIL submodule): it builds standalone with VS2022 + WDK.

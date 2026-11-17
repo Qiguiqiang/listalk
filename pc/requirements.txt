@@ -1,0 +1,6 @@
+sounddevice>=0.4.6
+numpy>=1.24
+qrcode>=7.4
+# Optional: Pillow lets the GUI show the pairing QR as an image
+# (without it, the QR payload is shown as text / ASCII in the console).
+# Pillow>=10.0

@@ -1,0 +1,32 @@
+# Build outputs
+*.apk
+*.idsig
+*.exe
+*.zip
+*.sys
+*.cat
+build-manual/
+build-output/
+publish/
+publish-*/
+stage/
+stage-*/
+
+# .NET
+bin/
+obj/
+*.user
+
+# Python
+__pycache__/
+*.pyc
+
+# Signing material / local secrets
+*.keystore
+*.jks
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

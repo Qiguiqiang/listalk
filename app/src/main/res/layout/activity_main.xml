@@ -1,0 +1,1551 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0E13">
+
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0E13"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_launcher" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="声桥 AirBridge"
+                android:textColor="#F2F5F9"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <View
+                android:id="@+id/viewStatusDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/bg_dot" />
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="未连接"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+            <TextView
+                android:id="@+id/btnOpenSettings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:padding="6dp"
+                android:text="⚙ 设置"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="把手机变成电脑的麦克风和扬声器"
+            android:textColor="#9AA7B8"
+            android:textSize="13sp" />
+
+        <!-- Reconnect banner -->
+        <TextView
+            android:id="@+id/bannerReconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner"
+            android:textColor="#FFB224"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Auto-connect / pairing banner (UI_SPEC_MULTIDEVICE §4.5/§5) -->
+        <LinearLayout
+            android:id="@+id/bannerAuto"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner_auto"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvBannerAutoText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#2CE8A5"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnBannerUndo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="撤销"
+                android:textColor="#F2F5F9"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <!-- Re-entry prompt (v2.1): paired PC returned after a long absence, mode=每次询问 -->
+        <LinearLayout
+            android:id="@+id/bannerReturnAsk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvReturnAskText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#FFB224"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnReturnAskConnect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="连接"
+                android:textColor="#2CE8A5"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnReturnAskIgnore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="忽略"
+                android:textColor="#F2F5F9"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/bannerHeadset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvHeadsetText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#45C7F2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnHeadsetSwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="切换到耳机"
+                android:textColor="#2CE8A5"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnHeadsetDismiss"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="不用"
+                android:textColor="#F2F5F9"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+
+        <!-- Hero card -->
+        <LinearLayout
+            android:id="@+id/heroCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_hero"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvHeroEyebrow"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="AIRBRIDGE"
+                    android:textColor="#5F6D80"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvLatencyBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge_idle"
+                    android:fontFamily="monospace"
+                    android:text="-- ms"
+                    android:textColor="#9AA7B8"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvHeroTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="还没开始"
+                android:textColor="#F2F5F9"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvHeroSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="先在电脑上打开声桥 PC 端，再点下方「开始搜索」"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+
+            <!-- Live meters (connected only) -->
+            <LinearLayout
+                android:id="@+id/meterBlock"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="麦克风 → 电脑"
+                        android:textColor="#F2F5F9"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="MIC"
+                        android:textColor="#5F6D80"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvMicDb"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:fontFamily="monospace"
+                        android:text="-∞ dB"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/meterMic"
+                    android:layout_width="match_parent"
+                    android:layout_height="22dp"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="电脑 → 扬声器"
+                        android:textColor="#F2F5F9"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SPEAKER"
+                        android:textColor="#5F6D80"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSpkDb"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:fontFamily="monospace"
+                        android:text="-∞ dB"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/meterSpk"
+                    android:layout_width="match_parent"
+                    android:layout_height="22dp"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- Chips -->
+            <LinearLayout
+                android:id="@+id/chipRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/chipRate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chip"
+                    android:fontFamily="monospace"
+                    android:text="48 kHz"
+                    android:textColor="#F2F5F9"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/chipTransport"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_chip"
+                    android:text="UDP · 10ms"
+                    android:textColor="#9AA7B8"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Stats bar -->
+            <TextView
+                android:id="@+id/tvStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_statsbar"
+                android:fontFamily="monospace"
+                android:text="丢包 --% · 抖动 -- ms · 缓冲 -- ms"
+                android:textColor="#9AA7B8"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Device section: the home centrepiece (one card per PC, built in code) -->
+        <LinearLayout
+            android:id="@+id/deviceSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="电脑设备"
+                android:textColor="#F2F5F9"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="配对过的电脑一出现就会自动连接；新电脑点卡片配对一次即可"
+                android:textColor="#5F6D80"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:id="@+id/deviceContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/tvNoDevice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            
+        </LinearLayout>
+
+        <!-- Add-a-PC card (UI_SPEC_MULTIDEVICE §1) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card_dashed"
+            android:orientation="vertical">
+
+            <Button
+                android:id="@+id/btnAddNearby"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="@drawable/btn_primary"
+                android:text="配对新电脑"
+                android:textColor="#052417"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="点一下，附近的电脑会自动出现在列表里，选一台即可配对——不用输任何东西"
+                android:textColor="#9AA7B8"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="其他方式："
+                    android:textColor="#5F6D80"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnAddScan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="扫码配对"
+                    android:textColor="#45C7F2"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/btnAddCode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="输入配对码"
+                    android:textColor="#45C7F2"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/btnAddManual"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="手动输入 IP"
+                    android:textColor="#45C7F2"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Channel cards (connected only) -->
+        <LinearLayout
+            android:id="@+id/channelSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="麦克风 → 电脑"
+                        android:textColor="#F2F5F9"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <Switch
+                        android:id="@+id/cbMic"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="你的声音送到电脑，当麦克风用"
+                    android:textColor="#9AA7B8"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/tvMicState"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="● 正在发送"
+                    android:textColor="#2CE8A5"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="回声抑制"
+                        android:textColor="#F2F5F9"
+                        android:textSize="14sp" />
+
+                    <Switch
+                        android:id="@+id/swEcho"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvEchoStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="系统AEC已启用"
+                    android:textColor="#9AA7B8"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="电脑 → 扬声器"
+                        android:textColor="#F2F5F9"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <Switch
+                        android:id="@+id/cbSpeaker"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="电脑的声音从手机播放"
+                    android:textColor="#9AA7B8"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/tvSpkState"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="● 正在播放"
+                    android:textColor="#45C7F2"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvLoopGuardNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="⚠ 已拦截自身声音回放：电脑端的声音采集源可能包含了手机麦克风，请在电脑端改选采集设备"
+                    android:textColor="#FFB224"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="播放音量"
+                        android:textColor="#9AA7B8"
+                        android:textSize="13sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekVolume"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:progressTint="#45C7F2"
+                        android:thumbTint="#45C7F2" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Primary button: one button, three states -->
+        <Button
+            android:id="@+id/btnStart"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/btn_primary"
+            android:text="开始搜索"
+            android:textColor="#052417"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvElapsed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="USB 连接同样自动识别，无需设置"
+            android:textColor="#5F6D80"
+            android:textSize="12sp" />
+
+        
+    </LinearLayout>
+</ScrollView>
+
+    <!-- ===== Pairing overlay: QR scan (§4.2) ===== -->
+    <FrameLayout
+        android:id="@+id/overlayScan"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0E13"
+        android:visibility="gone">
+
+        <TextureView
+            android:id="@+id/textureScan"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnScanBack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="←"
+                    android:textColor="#F2F5F9"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="扫码配对"
+                    android:textColor="#F2F5F9"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btnTorch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="🔦 手电"
+                    android:textColor="#9AA7B8"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tvScanHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="对准电脑屏幕上的二维码"
+                android:textColor="#F2F5F9"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="电脑端打开声桥，点「显示配对二维码」即可"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnScanToCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:padding="12dp"
+                android:text="没有二维码？输入配对码 →"
+                android:textColor="#45C7F2"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <View
+            android:id="@+id/viewQrFrame"
+            android:layout_width="248dp"
+            android:layout_height="248dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_qr_frame" />
+    </FrameLayout>
+
+    <!-- ===== Pairing overlay: 6-digit code (§4.4) ===== -->
+    <LinearLayout
+        android:id="@+id/overlayCode"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0E13"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btnCodeBack"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="4dp"
+            android:text="← 输入配对码"
+            android:textColor="#F2F5F9"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="电脑端打开声桥，点「显示配对码」，把 6 位数字输进来（配对码 10 分钟内有效）"
+            android:textColor="#9AA7B8"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/etPairCode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/bg_input_code"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:inputType="number"
+            android:letterSpacing="0.5"
+            android:maxLength="6"
+            android:singleLine="true"
+            android:textColor="#F2F5F9"
+            android:textSize="28sp" />
+
+        <TextView
+            android:id="@+id/tvCodeHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="输入后会自动查找这台电脑…"
+            android:textColor="#5F6D80"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvCodeError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="#FF5C5C"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnCodeSubmit"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/btn_primary"
+            android:enabled="false"
+            android:text="查找并配对"
+            android:textColor="#052417"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnCodeToScan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="用扫码更快 → 扫码配对"
+            android:textColor="#45C7F2"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <!-- ===== Pairing overlay: verification confirm (§4.3) ===== -->
+    <LinearLayout
+        android:id="@+id/overlayConfirm"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0E13"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="找到这台电脑"
+            android:textColor="#F2F5F9"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_hero"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvConfirmName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#F2F5F9"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvConfirmSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="核对验证码"
+                android:textColor="#9AA7B8"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvConfirmVerify"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.3"
+                android:textColor="#2CE8A5"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="与电脑屏幕上显示的 6 位数一致再点配对"
+                android:textColor="#9AA7B8"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvConfirmError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner"
+            android:text="配对失败，电脑那边没有确认，请重试"
+            android:textColor="#FF5C5C"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="自动连接"
+                android:textColor="#F2F5F9"
+                android:textSize="14sp" />
+
+            <Switch
+                android:id="@+id/swAutoConfirm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="这台电脑以后出现在同一网络时，自动连接并按上次的设置开始推流"
+            android:textColor="#9AA7B8"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnConfirmPair"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/btn_primary"
+            android:text="确认配对"
+            android:textColor="#052417"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnConfirmCancel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="取消"
+            android:textColor="#9AA7B8"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <!-- ===== Settings (v2.1): real settings, all wired ===== -->
+    <LinearLayout
+        android:id="@+id/overlaySettings"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0E13"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="20dp">
+
+            <TextView
+                android:id="@+id/btnSettingsBack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="4dp"
+                android:text="← 设置"
+                android:textColor="#F2F5F9"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="重连方式"
+                        android:textColor="#F2F5F9"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <RadioGroup
+                        android:id="@+id/rgReconnect"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp">
+
+                        <RadioButton
+                            android:id="@+id/rbReconnectAsk"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="每次询问（离开较久回来时，先问我要不要连）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbReconnectAuto"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="总是自动连接（一出现就连上）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbReconnectNever"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="从不自动（只在列表里显示，我手动连）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="短暂掉线（60 秒内）始终自动续连，不受此设置影响。每台电脑的「自动连接」开关在设备卡上，可单独关。"
+                        android:textColor="#5F6D80"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="后台运行"
+                            android:textColor="#F2F5F9"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <Switch
+                            android:id="@+id/swBgService"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="开着时声桥在后台/熄屏也能发现电脑并推流（前台服务）。关掉后只在打开 App 时运行。"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvBatteryState"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btnBatteryGuide"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/btn_secondary"
+                        android:text="去关闭电池优化（防后台被杀）"
+                        android:textColor="#F2F5F9"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="回声抑制（手机端）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <Switch
+                            android:id="@+id/swEchoSettings"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvEchoLayers"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="声音输出"
+                        android:textColor="#F2F5F9"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <RadioGroup
+                        android:id="@+id/rgOutputRoute"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp" />
+
+                    <TextView
+                        android:id="@+id/tvOutputRouteState"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="麦克风"
+                        android:textColor="#F2F5F9"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="麦克风模式（下次连接时生效）"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <RadioGroup
+                        android:id="@+id/rgMicMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <RadioButton
+                            android:id="@+id/rbMicModeComm"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="语音通话（平台回声/降噪处理，外放时用）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbMicModeHd"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="高清拾音（只走自研回声链，耳机/安静环境最佳音质）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbMicModeAuto"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="自动（外放用通话，耳机用高清）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="灵敏度"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <RadioGroup
+                        android:id="@+id/rgMicSens"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <RadioButton
+                            android:id="@+id/rbMicStd"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="标准"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbMicHigh"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="高灵敏（小声说话更容易被收录）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="降噪"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <RadioGroup
+                        android:id="@+id/rgNsMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <RadioButton
+                            android:id="@+id/rbNsStd"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="标准（平台降噪开）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+
+                        <RadioButton
+                            android:id="@+id/rbNsSoft"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="轻柔（平台降噪关，更保护小声人声）"
+                            android:textColor="#F2F5F9"
+                            android:textSize="13sp" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="输入设备"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+
+                    <RadioGroup
+                        android:id="@+id/rgInputDevices"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <TextView
+                        android:id="@+id/tvInputDeviceState"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="事件通知"
+                            android:textColor="#F2F5F9"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <Switch
+                            android:id="@+id/swNotifications"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="自动连接、离开后回归询问等事件的通知。常驻的前台服务通知是系统要求，不受此开关影响。"
+                        android:textColor="#9AA7B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+<LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="应用更新"
+                android:textColor="#F2F5F9"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvUpdateInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="当前版本 2.0.0"
+                android:textColor="#9AA7B8"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/etUpdateUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_input"
+                android:hint="更新地址 update.json"
+                android:inputType="textUri"
+                android:padding="10dp"
+                android:singleLine="true"
+                android:textColor="#F2F5F9"
+                android:textColorHint="#5F6D80"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnCheckUpdate"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/btn_secondary"
+                android:text="检查更新"
+                android:textColor="#F2F5F9"
+                android:textSize="15sp" />
+        </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- ===== Nearby discovery sheet (v2.1): PRIMARY pairing entry ===== -->
+    <LinearLayout
+        android:id="@+id/overlayDiscover"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#0B0E13"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnDiscoverBack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="4dp"
+                android:text="← 附近的电脑"
+                android:textColor="#F2F5F9"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvDiscoverStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="正在探寻周边设备…"
+            android:textColor="#9AA7B8"
+            android:textSize="13sp" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:id="@+id/discoverContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
+        <TextView
+            android:id="@+id/tvDiscoverEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="还没探到电脑——确认电脑端声桥已打开、蓝牙和 WiFi 都开着"
+            android:textColor="#5F6D80"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="其他方式："
+                android:textColor="#5F6D80"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/btnDiscoverScan"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="扫码配对"
+                android:textColor="#45C7F2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnDiscoverCode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="输入配对码"
+                android:textColor="#45C7F2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnDiscoverManual"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="手动输入 IP"
+                android:textColor="#45C7F2"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>
