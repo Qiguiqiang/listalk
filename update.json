@@ -1,14 +1,14 @@
 {
   "android": {
-    "version": "2.2.4",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.4/SoundRelay-Android-v2.2.4.apk",
-    "sha256": "f6610f124ac61c11a599eae736a56da9818f2b39f7abe817d5f9cc8e3db5c376",
-    "notes": "v2.2.4（两端同版本）：本版手机端功能与 v2.2.3 一致，仅版本号与电脑端对齐（两端同版本成套发布）；修复集中在电脑端安装程序——驱动组件的「开启测试模式」步骤此前必然失败（退出码 13），详见电脑端说明。 / EN: No functional changes on Android in v2.2.4 — version aligned with the Windows release (both ends ship version-locked); the fix is in the Windows installer (driver component, exit code 13)."
+    "version": "2.3.0",
+    "url": "https://github.com/Qiguiqiang/listalk/releases/download/v2.3.0/LisTalk-Android-v2.3.0.apk",
+    "sha256": "1bc091057ba00638d16a214b3fb7416b40cf14cb119219e4cd9b21e058b207d2",
+    "notes": "v2.3.0（两端同版本）：【改名】声音接力 SoundRelay 更名为「听说 LisTalk」，配对与设置原样保留，可直接覆盖升级。【新功能】摄像头接力：手机摄像头可推流到电脑。【修复与改进】播放改走媒体音量流，手机音量键现在直接控制听到的音量；来电时自动暂停播放并停发麦克风；返回键改为正常 App 行为（关面板而非退出，后台模式下按返回不再停桥）；未连接的已配对电脑收起为紧凑条，设备页可下拉重新搜索（不影响已连接会话）；长按设备可置顶；修复恢复后通知仍显示已暂停、配对失败无提示的问题。 / EN: Renamed to LisTalk (pairings and settings carry over). New: camera relay to the PC. Playback now uses the media volume stream, calls pause playback and mute the mic, Back closes panels instead of exiting (and no longer stops the bridge in activity-bound mode), offline paired PCs collapse to compact rows, pull-to-refresh on the device page, pin devices via long-press, plus notification and pairing-error fixes."
   },
   "windows": {
-    "version": "2.2.4",
-    "url": "https://github.com/Qiguiqiang/soundrelay/releases/download/v2.2.4/SoundRelay-Setup-v2.2.4.exe",
-    "sha256": "00b9ae7ca3edcfb09a169be181c71b8a50ac7439f4da26608574882af5248cac",
-    "notes": "v2.2.4（两端同版本）：【修复】驱动组件安装必然失败（退出码 13）——安装器是 32 位启动链，以裸名调用只有 64 位版本的 bcdedit 时被系统重定向到 32 位目录而找不到命令，「开启 Windows 测试模式」一步从未成功过。现已改为按原生工具绝对路径调用（32 位进程自动经 Sysnative 找到 64 位本体）；安装前会先检测测试模式状态，已经开启的（包括此前手动开启的）直接跳过该步；若仍失败，弹窗会直接显示失败命令的原始输出。除此之外无其它变更，驱动本体与 v2.2.3 相同。此前遇到退出码 13 的用户：装上 v2.2.4 后重新运行安装程序、保持驱动组件勾选即可。 / EN: Fixes the driver component failing with exit code 13: the 32-bit installer chain could not find the 64-bit-only bcdedit, so enabling Windows test mode always failed. Native tools are now invoked by absolute path (Sysnative-aware), test mode already enabled is detected and skipped, and failures show the command output in the dialog. No other changes."
+    "version": "2.3.0",
+    "url": "https://github.com/Qiguiqiang/listalk/releases/download/v2.3.0/LisTalk-Setup-v2.3.0.exe",
+    "sha256": "76e31315f64adf83658bc97ccb7aace1c60ea28b1189d0ffb2f04e95ded74915",
+    "notes": "v2.3.0（两端同版本）：【改名】声音接力 SoundRelay 更名为「听说 LisTalk」（仓库同步改名 listalk，旧更新地址自动重定向，旧版可直接检查更新升级）；桌面/开始菜单旧名快捷方式会被安装程序自动清理。【新功能】摄像头接力预览窗（虚拟摄像头组件将在后续小版本中经单独构建验证后提供）。【发现加固】新增 Windows 防火墙入站规则（安装程序创建、App 每次启动自检、缺失时诊断页可一键修复）——这是此前「手机搜不到电脑」的头号根因；另含跨网段扫描排序、逐网卡广播等改进。【音量】电脑端「手机音量」滑杆已接通协议，可远程调手机扬声器音量。【修复】「断开连接」改为只断当前会话（引擎与发现继续运行）；暂停标签重启后翻转、重连中状态文案与统计冻结、mDNS/蓝牙组件故障可能导致启动崩溃等问题。注：本版驱动包未变（仍为测试签名版，设备名仍显示旧品牌），正规签名驱动在准备中。 / EN: Renamed to LisTalk (repo renamed to listalk; the old update URL redirects, and the installer removes the old-name shortcuts). New: camera relay preview window (the virtual-camera component will follow in a point release once its standalone build is verified). Discovery hardening: a Windows Firewall inbound rule is created by the installer and self-checked at every start (one-click repair in diagnostics) — the top cause of \"phone can't find the PC\" — plus smarter cross-subnet sweeps. The PC \"phone volume\" slider now works over the protocol. \"Disconnect\" ends only that session; pause-label, reconnect-status and mDNS/BLE startup fixes included. The bundled driver package is unchanged (test-signed, legacy on-screen names); the signed driver is in preparation."
   }
 }
