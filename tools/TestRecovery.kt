@@ -19,7 +19,9 @@ fun main() {
     val dir = PeerDirectory()
     dir.note("pc-1", "192.168.1.50", 1000L)
     expect(dir.freshIp("pc-1", 2000L) == "192.168.1.50", "fresh sighting resolves")
-    expect(dir.freshIp("pc-1", 1000L + PeerDirectory.FRESH_MS + 1) == null, "stale sighting (>3s) does not resolve")
+    expect(dir.freshIp("pc-1", 1000L + PeerDirectory.FRESH_MS + 1) == null, "stale sighting (>fresh window) does not resolve")
+    expect(PeerDirectory.FRESH_MS in 6000L..8000L,
+        "presence freshness relaxed to ~6-8s (F16: two dropped 1s beacons must not flicker a device offline)")
     expect(dir.freshIp("unknown", 2000L) == null, "unknown device does not resolve")
     dir.note("", "192.168.1.99", 2000L)
     expect(dir.sighting("") == null, "empty deviceId ignored")

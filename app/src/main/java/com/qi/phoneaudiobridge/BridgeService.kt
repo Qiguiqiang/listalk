@@ -22,6 +22,7 @@ class BridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         AudioEngine.attachContext(applicationContext)
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
@@ -57,6 +58,13 @@ class BridgeService : Service() {
             ACTION_RETURN_IGNORE -> {
                 AudioEngine.dismissReturnAsk()
                 cancelAskNotification()
+                return START_STICKY
+            }
+            ACTION_REFRESH_FG -> {
+                // camera relay started/stopped (wave 4): re-post the
+                // foreground notification with the FGS type set that
+                // matches current engine state (Android 14 camera type).
+                showForeground()
                 return START_STICKY
             }
         }
@@ -104,13 +112,25 @@ class BridgeService : Service() {
     private fun showForeground() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            // Android 14 (API 34): while the camera relay is live, the
+            // service must also carry the camera type or the system
+            // blocks camera access from the background. Only added when
+            // the CAMERA permission is actually granted — declaring a
+            // type without its permission throws.
+            if (Build.VERSION.SDK_INT >= 34 && AudioEngine.cameraRelayActive &&
+                checkSelfPermission(android.Manifest.permission.CAMERA) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            }
+            startForeground(NOTIF_ID, notification, types)
         } else {
             startForeground(NOTIF_ID, notification)
         }
     }
 
     override fun onDestroy() {
+        isRunning = false
         // When the user switches 后台运行 off in Settings, the Activity sets
         // stopEngineOnDestroy=false first so the engine survives the switch
         // to Activity-bound mode instead of being killed with the service.
@@ -121,6 +141,10 @@ class BridgeService : Service() {
 
     companion object {
         @Volatile var stopEngineOnDestroy = true
+        /** True while the service instance exists (onCreate..onDestroy);
+         * the engine uses it to ask for a foreground-type refresh only
+         * when there is a service to refresh. */
+        @Volatile var isRunning = false
         private const val CHANNEL_ID = "phone_audio_bridge"
         private const val NOTIF_ID = 1
         const val ACTION_PAUSE = "com.qi.phoneaudiobridge.action.PAUSE"
@@ -128,5 +152,6 @@ class BridgeService : Service() {
         const val ACTION_DISCONNECT = "com.qi.phoneaudiobridge.action.DISCONNECT"
         const val ACTION_RETURN_CONNECT = "com.qi.phoneaudiobridge.action.RETURN_CONNECT"
         const val ACTION_RETURN_IGNORE = "com.qi.phoneaudiobridge.action.RETURN_IGNORE"
+        const val ACTION_REFRESH_FG = "com.qi.phoneaudiobridge.action.REFRESH_FG"
     }
 }

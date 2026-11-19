@@ -122,7 +122,10 @@ public sealed class AppSettings
     /// <summary>Desktop UI: notify when a phone returns and asks to reconnect (Settings → 通知 group).</summary>
     public bool ReturnAskNotify { get; set; } = true;
     /// <summary>Desktop UI: phone playback volume shown on the speaker channel card (0–100).
-    /// Persisted UI state; the wire protocol has no volume packet yet (see checklist).</summary>
+    /// This is only the slider's persisted last-known position: the VALUE itself lives
+    /// on the phone (per-device gain). On connect the engine overwrites the slider from
+    /// the phone's HELLO report (BridgeEngine.PhoneSpeakerVolume); dragging sends
+    /// TYPE_SET_VOLUME (BridgeEngine.SendPhoneVolume). Wiring lives in MainWindow.</summary>
     public int PhoneVolumePercent { get; set; } = 70;
 
     public static string FilePath => Path.Combine(AppConfig.DirPath, "settings.json");
@@ -309,7 +312,7 @@ public static class DeviceScoring
     {
         string n = name.ToLowerInvariant();
         int score = 0;
-        if (n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (new + legacy brand names)
+        if (n.Contains("听说") || n.Contains("listalk") || n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (current + all legacy brand names — add-only, never delete: installed legacy-branded drivers are recognised through this table)
         if (n.Contains("cable input")) score = Math.Max(score, 100);
         if (n.Contains("blackhole")) score = Math.Max(score, 95);
         if (n.Contains("vb-audio") || n.Contains("vb-cable") || n.Contains("cable")) score = Math.Max(score, 85);
@@ -322,7 +325,7 @@ public static class DeviceScoring
     {
         string n = name.ToLowerInvariant();
         int score = 0;
-        if (n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (new + legacy brand names)
+        if (n.Contains("听说") || n.Contains("listalk") || n.Contains("声音接力") || n.Contains("soundrelay") || n.Contains("声桥") || n.Contains("airbridge")) score = Math.Max(score, 110); // own branded driver wins (current + all legacy brand names — add-only, never delete: installed legacy-branded drivers are recognised through this table)
         if (n.Contains("cable output")) score = Math.Max(score, 100);
         if (n.Contains("phoneaudiobridge") || n.Contains("phone-speaker") || n.Contains("phone_speaker")) score = Math.Max(score, 100);
         if (n.Contains("monitor")) score = Math.Max(score, 95);

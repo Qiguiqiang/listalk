@@ -47,7 +47,13 @@ class PeerDirectory {
     fun isFresh(deviceId: String, nowMs: Long, freshMs: Long = FRESH_MS): Boolean =
         freshIp(deviceId, nowMs, freshMs) != null
 
-    companion object { const val FRESH_MS = 3000L }
+    /** Presence freshness window: ~7 s (hardening §5.2/§5.9, F16). At a
+     *  1 s beacon period the old 3 s window flipped a device "offline"
+     *  after just two dropped/delayed beacons (WiFi power-save batching,
+     *  router broadcast throttling); 7 s tolerates a realistic burst of
+     *  losses without going stale-blind. Session dead-peer logic keys
+     *  off session traffic, not this window, and is untouched. */
+    companion object { const val FRESH_MS = 7000L }
 }
 
 object RecoveryPolicy {

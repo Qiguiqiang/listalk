@@ -42,8 +42,8 @@ internal static class Program
         {
             StartupLog.Info("another instance is already running — this launch exits");
             StartupLog.ShowInfoDialog(
-                "声音接力 SoundRelay 已经在运行（请看任务栏右下角托盘图标）。\n双击托盘图标即可打开主窗口。本次启动将退出。",
-                "SoundRelay is already running (see the tray icon in the taskbar corner).\nDouble-click the tray icon to open the main window. This launch will exit.");
+                "听说 LisTalk 已经在运行（请看任务栏右下角托盘图标）。\n双击托盘图标即可打开主窗口。本次启动将退出。",
+                "LisTalk is already running (see the tray icon in the taskbar corner).\nDouble-click the tray icon to open the main window. This launch will exit.");
             return 0;
         }
 
@@ -59,8 +59,8 @@ internal static class Program
             // must never again be a silent no-show.
             StartupLog.Error("fatal: StartWithClassicDesktopLifetime", ex);
             StartupLog.ShowFatalDialog(
-                $"声音接力 SoundRelay 启动失败：\n{ex.GetType().Name}: {ex.Message}\n\n启动日志已写入下面这个文件，把它发给开发者即可定位原因：",
-                $"SoundRelay failed to start:\n{ex.GetType().Name}: {ex.Message}\n\nA startup log was written to the file below — send it to the developer to pinpoint the cause:");
+                $"听说 LisTalk 启动失败：\n{ex.GetType().Name}: {ex.Message}\n\n启动日志已写入下面这个文件，把它发给开发者即可定位原因：",
+                $"LisTalk failed to start:\n{ex.GetType().Name}: {ex.Message}\n\nA startup log was written to the file below — send it to the developer to pinpoint the cause:");
             return 1;
         }
     }

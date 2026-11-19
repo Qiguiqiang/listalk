@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:AirBridge"
         x:Class="AirBridge.MainWindow"
-        Title="声音接力 SoundRelay"
+        Title="听说 LisTalk"
         Width="1160" Height="680"
         MinWidth="940" MinHeight="580"
         ExtendClientAreaToDecorationsHint="True"
@@ -27,7 +27,7 @@
               <Border Width="2.5" Height="8" CornerRadius="1.2" Background="{StaticResource BarGradient}"/>
             </StackPanel>
           </Border>
-          <TextBlock Text="声音接力 SoundRelay" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Text1}" VerticalAlignment="Center"/>
+          <TextBlock Text="听说 LisTalk" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Text1}" VerticalAlignment="Center"/>
           <TextBlock Name="tbMachine" Text="· 本机" FontSize="12.5" Foreground="{StaticResource Text2}" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -72,8 +72,8 @@
                 </StackPanel>
               </Border>
               <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="声音接力" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
-                <TextBlock Text="SOUNDRELAY" FontSize="10.5" Foreground="{StaticResource Text3}" Margin="0,2,0,0"/>
+                <TextBlock Text="听说" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
+                <TextBlock Text="LISTALK" FontSize="10.5" Foreground="{StaticResource Text3}" Margin="0,2,0,0"/>
               </StackPanel>
             </Grid>
             <Border Height="1" Background="{StaticResource Stroke}" Margin="8,16,8,14"/>
@@ -105,7 +105,7 @@
                   <Border Name="navAboutBar" Width="3" CornerRadius="1.5" Background="{StaticResource Accent}" Margin="-10,1,7,1" IsVisible="False"/>
                   <Path Grid.Column="1" Classes="icon" Data="{StaticResource IconInfo}" Stroke="{Binding $parent[Button].Foreground}" Width="17" Height="17" VerticalAlignment="Center"/>
                   <TextBlock Grid.Column="2" Text="关于" Margin="11,0,0,0" VerticalAlignment="Center"/>
-                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.2.4" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+                  <TextBlock Name="navAboutVer" Grid.Column="3" Text="v2.3.0" Classes="mono" FontSize="11" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
                 </Grid>
               </Button>
             </StackPanel>
@@ -123,7 +123,7 @@
               </StackPanel>
             </Border>
             <Grid Margin="6,0,0,0">
-              <TextBlock Name="sideVersion" Text="v2.2.4" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
+              <TextBlock Name="sideVersion" Text="v2.3.0" Classes="mono" FontSize="11.5" Foreground="{StaticResource Text3}" VerticalAlignment="Center"/>
               <Button Name="btnSideUpdate" Content="有新版本" FontSize="11" FontWeight="SemiBold"
                       Background="{StaticResource Warn}" Foreground="{StaticResource Bg}"
                       CornerRadius="999" Padding="9,2.5" BorderThickness="0"
@@ -220,7 +220,7 @@
                   </Border>
                   <StackPanel Grid.Column="1" Margin="20,0,0,0">
                     <TextBlock Name="heroEmptyTitle" Text="等待手机连接" Classes="h19"/>
-                    <TextBlock Name="heroEmptyDesc" Text="在手机上打开声音接力即可自动找到这台电脑" Classes="desc" FontSize="12.5" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                    <TextBlock Name="heroEmptyDesc" Text="在手机上打开听说即可自动找到这台电脑" Classes="desc" FontSize="12.5" TextWrapping="Wrap" Margin="0,5,0,0"/>
                   </StackPanel>
                   <StackPanel Grid.Column="2" Spacing="8">
                     <Button Name="btnGotoDiscover" Classes="btn pri" Content="查看附近设备"/>
@@ -318,7 +318,7 @@
                       <Grid ColumnDefinitions="*,Auto,Auto">
                         <TextBlock Name="pickOutName" Text="—" FontSize="12.5" Foreground="{StaticResource Text1}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                         <Border Name="pickOutTag" Grid.Column="1" CornerRadius="999" Padding="8,2" Background="{StaticResource AccentDim}" Margin="8,0,0,0">
-                          <TextBlock Name="pickOutTagText" Text="声音接力设备" FontSize="10.5" Foreground="{StaticResource Accent}"/>
+                          <TextBlock Name="pickOutTagText" Text="听说设备" FontSize="10.5" Foreground="{StaticResource Accent}"/>
                         </Border>
                         <Path Grid.Column="2" Data="{StaticResource IconChevron}" Stroke="{StaticResource Text2}" StrokeThickness="1.5" Width="12" Height="12" Stretch="Uniform" Margin="6,0,0,0" VerticalAlignment="Center"/>
                       </Grid>
@@ -355,7 +355,7 @@
                       <Grid ColumnDefinitions="*,Auto,Auto">
                         <TextBlock Name="pickInName" Text="—" FontSize="12.5" Foreground="{StaticResource Text1}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                         <Border Name="pickInTag" Grid.Column="1" CornerRadius="999" Padding="8,2" Background="{StaticResource SkyDim}" Margin="8,0,0,0">
-                          <TextBlock Name="pickInTagText" Text="声音接力设备" FontSize="10.5" Foreground="{StaticResource Sky}"/>
+                          <TextBlock Name="pickInTagText" Text="听说设备" FontSize="10.5" Foreground="{StaticResource Sky}"/>
                         </Border>
                         <Path Grid.Column="2" Data="{StaticResource IconChevron}" Stroke="{StaticResource Text2}" StrokeThickness="1.5" Width="12" Height="12" Stretch="Uniform" Margin="6,0,0,0" VerticalAlignment="Center"/>
                       </Grid>
@@ -427,7 +427,7 @@
                 <TextBlock Text="附近的新设备" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
               </Grid>
               <StackPanel Name="nearbyList" Spacing="10"/>
-              <TextBlock Name="nearbyEmpty" Text="暂无新设备 · 让手机打开声音接力并连上同一 WiFi" Classes="desc" IsVisible="False"/>
+              <TextBlock Name="nearbyEmpty" Text="暂无新设备 · 让手机打开听说并连上同一 WiFi" Classes="desc" IsVisible="False"/>
 
               <Border Classes="card" Padding="16" Margin="0,16,0,0">
                 <Grid ColumnDefinitions="Auto,*">
@@ -527,7 +527,7 @@
                   <Border BorderBrush="#8C26303F" BorderThickness="0,1,0,0" Padding="18,12">
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="声音接力虚拟音频设备" Classes="t135"/>
+                        <TextBlock Text="听说虚拟音频设备" Classes="t135"/>
                         <TextBlock Name="tvVdevDesc" Text="正在检测…" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
                       <Border Name="pillVdev" Grid.Column="1" CornerRadius="999" Padding="9,2.5" Background="{StaticResource AccentDim}" VerticalAlignment="Center">
@@ -545,7 +545,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                       <StackPanel Margin="0,0,14,0">
                         <TextBlock Text="自动检查更新" Classes="t135"/>
-                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.2.4 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <TextBlock Name="tvUpdDesc" Text="当前版本 v2.3.0 · 发现新版本时在侧边栏提醒" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
                       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <local:SwitchControl Name="swAutoCheck" Width="38" Height="22" Small="True" VerticalAlignment="Center"/>
@@ -620,7 +620,10 @@
                         <TextBlock Text="发现层状态" Classes="t135"/>
                         <TextBlock Name="tvDiscoveryStatus" Text="" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
-                      <Button Name="btnRefreshDevices" Grid.Column="1" Classes="btn sm" Content="刷新设备列表" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Name="btnRepairFirewall" Classes="btn sm" Content="一键修复防火墙" IsVisible="False"/>
+                        <Button Name="btnRefreshDevices" Classes="btn sm" Content="刷新设备列表"/>
+                      </StackPanel>
                     </Grid>
                   </Border>
                   <Border BorderBrush="#8C26303F" BorderThickness="0,1,0,0" Padding="18,12">
@@ -631,7 +634,7 @@
                   </Border>
                 </StackPanel>
               </Border>
-              <TextBlock Name="tbSetFoot" Text="声音接力 SoundRelay · 设置保存在本机，不上传任何数据"
+              <TextBlock Name="tbSetFoot" Text="听说 LisTalk · 设置保存在本机，不上传任何数据"
                          FontSize="11.5" Foreground="{StaticResource Text3}" TextAlignment="Center"/>
             </StackPanel>
           </ScrollViewer>
@@ -659,9 +662,9 @@
                     </StackPanel>
                   </Border>
                   <StackPanel Grid.Column="1" Margin="16,0,0,0">
-                    <TextBlock Text="声音接力 SoundRelay" Classes="h19"/>
-                    <TextBlock Text="让声音在电脑、手机和耳机之间自由接力" Classes="desc" FontSize="12.5" Margin="0,5,0,0"/>
-                    <TextBlock Name="tbAboutVer" Text="版本 v2.2.4 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
+                    <TextBlock Text="听说 LisTalk" Classes="h19"/>
+                    <TextBlock Text="让影音在电脑、手机和耳机之间自由接力" Classes="desc" FontSize="12.5" Margin="0,5,0,0"/>
+                    <TextBlock Name="tbAboutVer" Text="版本 v2.3.0 · Windows 版" Classes="mono" FontSize="12" Foreground="{StaticResource Text3}" Margin="0,6,0,0"/>
                   </StackPanel>
                 </Grid>
               </Border>
@@ -698,7 +701,7 @@
                         <TextBlock Text="开源许可" Classes="t135"/>
                         <TextBlock Text="Apache License 2.0 · 免费供所有人使用" Classes="desc115" LineHeight="17" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
-                      <TextBlock Text="github.com/Qiguiqiang/soundrelay" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}" VerticalAlignment="Center"/>
+                      <TextBlock Text="github.com/Qiguiqiang/listalk" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}" VerticalAlignment="Center"/>
                     </Grid>
                   </Border>
                 </StackPanel>
@@ -721,9 +724,9 @@
             <StackPanel Grid.Column="1" Margin="12,0,0,0">
               <TextBlock Name="modalTitle" Text="发现新版本" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Text1}"/>
               <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                <TextBlock Name="modalVerFrom" Text="v2.2.4" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
+                <TextBlock Name="modalVerFrom" Text="v2.3.0" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
                 <TextBlock Text=" → " Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
-                <TextBlock Name="modalVerTo" Text="v2.2.4" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
+                <TextBlock Name="modalVerTo" Text="v2.3.0" Classes="mono" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Warn}"/>
                 <TextBlock Name="modalVerExtra" Text="" Classes="mono" FontSize="12" Foreground="{StaticResource Text2}"/>
               </StackPanel>
             </StackPanel>

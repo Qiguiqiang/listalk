@@ -1,12 +1,12 @@
 [English](README.md) | **简体中文**
 
-# 声音接力 SoundRelay
+# 听说 LisTalk
 
-## 让声音在电脑、手机和耳机之间自由接力。
+## 让影音在电脑、手机和耳机之间自由接力。
 
 **电脑的声音共享到手机和耳机，手机的麦克风共享给电脑 —— 通过 WiFi 或蓝牙。**
 
-声音接力把你的手机变成电脑的无线麦克风和无线扬声器：一端是 Android 手机，一端是电脑，两端装上 App 就能互相「借」声音。电脑放出的声音可以在手机上响、可以顺着手机再接力进你的耳机；你对着手机说话，声音就出现在电脑的麦克风里，会议、直播、录课软件直接能用。
+听说把你的手机变成电脑的无线麦克风和无线扬声器：一端是 Android 手机，一端是电脑，两端装上 App 就能互相「借」声音。电脑放出的声音可以在手机上响、可以顺着手机再接力进你的耳机；你对着手机说话，声音就出现在电脑的麦克风里，会议、直播、录课软件直接能用。
 
 ---
 
@@ -41,19 +41,19 @@
 - **配对过的设备会被记住**：回到配对过的环境自动发现、按你的设置自动连接（可设为每次询问 / 总是自动 / 从不自动）
 - **两端后台工作**：电脑端托盘常驻、可开机自启；手机端前台服务保活，熄屏照常推流
 - **在线更新**：两端同版本成套发布，App 内按内置更新地址检查更新，下载后 SHA-256 校验、校验不过拒绝安装
-- **自有品牌虚拟音频驱动（Windows，可选）**：装上后 Windows 声音设置里出现「扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备）」，不用再借第三方虚拟声卡。当前为**测试签名版**：需要开启 Windows 测试模式并关闭 Secure Boot，仅适合自用，限制见 [driver/README.md](driver/README.md)
+- **自有品牌虚拟音频驱动（Windows，可选）**：装上后 Windows 声音设置里出现「扬声器 / 麦克风（听说 LisTalk 虚拟音频设备）」，不用再借第三方虚拟声卡。当前为**测试签名版**：需要开启 Windows 测试模式并关闭 Secure Boot，仅适合自用，限制见 [driver/README.md](driver/README.md)
 
 ## 快速开始
 
-1. **下载**：到 [Releases](https://github.com/Qiguiqiang/soundrelay/releases) 下载最新版
-   - Android：`SoundRelay-Android-v2.2.4.apk`（安装时请允许「安装未知应用」）
-   - Windows：`SoundRelay-Setup-v2.2.4.exe` 安装包（未做代码签名，首次运行 Windows 会弹 SmartScreen 提示，点「更多信息 → 仍要运行」）
+1. **下载**：到 [Releases](https://github.com/Qiguiqiang/listalk/releases) 下载最新版
+   - Android：`LisTalk-Android-v2.3.0.apk`（安装时请允许「安装未知应用」）
+   - Windows：`LisTalk-Setup-v2.3.0.exe` 安装包（未做代码签名，首次运行 Windows 会弹 SmartScreen 提示，点「更多信息 → 仍要运行」）
    - Linux：用 `pc/` 目录的 Python 版（见 [pc/](pc/) 内脚本）
 2. 手机和电脑连**同一个 WiFi**（或用 USB 线 + adb 转发），两端打开 App
 3. 手机上点「配对新电脑」，在附近列表里点你的电脑，按提示核对两端显示的验证码一致即可
-4. 在电脑的会议/直播软件里，把麦克风选为声音接力的虚拟设备（或 VB-CABLE），扬声器同理；手机端可以选声音从扬声器、听筒还是耳机出
+4. 在电脑的会议/直播软件里，把麦克风选为听说的虚拟设备（或 VB-CABLE），扬声器同理；手机端可以选声音从扬声器、听筒还是耳机出
 
-驱动（可选）：想用声音接力自有虚拟音频设备而不是 VB-CABLE 的，按 [driver/README.md](driver/README.md) 操作（需要一台装有 VS2022 + WDK 的 Windows 机器先构建一次）。
+驱动（可选）：想用听说自有虚拟音频设备而不是 VB-CABLE 的，按 [driver/README.md](driver/README.md) 操作（需要一台装有 VS2022 + WDK 的 Windows 机器先构建一次）。
 
 ## 从源码构建
 
@@ -75,7 +75,7 @@
 
 ## 项目状态
 
-个人开源项目，**积极开发中**。当前版本 v2.2.4。核心链路（双向推流、回声消除、自动发现、多设备、在线更新）已完成并通过本地自动化测试；听感、不同品牌手机的音频路由、各家 Mesh 路由器下的漫游表现等，仍在持续真机实测和打磨中 —— 欢迎在 Issues 里反馈你的机型和现象。
+个人开源项目，**积极开发中**。当前版本 v2.3.0。核心链路（双向推流、回声消除、自动发现、多设备、在线更新）已完成并通过本地自动化测试；听感、不同品牌手机的音频路由、各家 Mesh 路由器下的漫游表现等，仍在持续真机实测和打磨中 —— 欢迎在 Issues 里反馈你的机型和现象。
 
 也欢迎 PR：协议保持简单（一台手机对多台电脑、单 UDP 通道），改协议请先看 `PROTOCOL.md` 并跑 `tools/check_protocol_consistency.py`。
 
@@ -89,9 +89,9 @@
 
 ## English Summary
 
-**SoundRelay — let sound relay freely between your PC, your phone, and your earphones.**
+**LisTalk — let audio and video relay freely between your PC, your phone, and your earphones.**
 
-SoundRelay turns an Android phone into a wireless microphone and speaker for your computer, over WiFi (or USB/Bluetooth-assisted discovery):
+LisTalk turns an Android phone into a wireless microphone and speaker for your computer, over WiFi (or USB/Bluetooth-assisted discovery):
 
 - **Phone as a wireless mic** for meetings, streaming and recording on the PC
 - **PC audio played on the phone** — speaker, earpiece, or earphones

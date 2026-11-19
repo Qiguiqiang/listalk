@@ -77,17 +77,28 @@ object SubnetSweep {
         raw.split(',', ';', '\n', '\r', ' ', '\t').map { it.trim() }.filter { it.isNotEmpty() }
 
     /**
-     * Ordered, deduped candidate /24 networks, capped at [MAX_SUBNETS]:
-     * local-interface subnets first (the peer is most often at home),
-     * then paired devices' subnets, then the user's extra subnets.
+     * Ordered, deduped candidate /24 networks, capped at [MAX_SUBNETS],
+     * ordered by VALUE (discovery hardening, F9): paired devices' subnets
+     * FIRST — they are added before anything else, so no pile of local
+     * virtual/VPN adapters (Hyper-V/WSL/VMware/TAP…) can ever evict the
+     * subnet a paired device actually lives on — then local PHYSICAL
+     * (Ethernet/WiFi) subnets, then local VIRTUAL subnets, then the
+     * user's extra subnets. Callers classify their interface addresses
+     * into the two local lists.
      */
-    fun candidateSubnets(localIps: List<Int>, pairedIps: List<Int>, extraSpecs: List<String>): List<Int> {
+    fun candidateSubnets(
+        localPhysicalIps: List<Int>,
+        localVirtualIps: List<Int>,
+        pairedIps: List<Int>,
+        extraSpecs: List<String>
+    ): List<Int> {
         val out = ArrayList<Int>()
         fun add(net: Int) {
             if (net !in out && out.size < MAX_SUBNETS) out.add(net)
         }
-        for (ip in localIps) add(subnet24(ip))
         for (ip in pairedIps) add(subnet24(ip))
+        for (ip in localPhysicalIps) add(subnet24(ip))
+        for (ip in localVirtualIps) add(subnet24(ip))
         for (spec in extraSpecs) parseSubnetSpec(spec)?.let { add(it) }
         return out
     }

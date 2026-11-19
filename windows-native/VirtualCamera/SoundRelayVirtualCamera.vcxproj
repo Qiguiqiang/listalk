@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SoundRelay virtual camera: Media Foundation media source DLL.
+     Built by .github/workflows/build-virtual-camera.yml on
+     windows-latest. No PlatformToolset pin on purpose: the project
+     takes whatever toolset the runner's Visual Studio defaults to
+     (the code is plain C++17 + Win32/MF, no version-sensitive APIs).
+     The stubs/ directory is NOT part of this build — it only serves
+     the Linux sandbox syntax pass. -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{CBD63BBD-B08D-4E9B-8DA4-950EBE6026FD}</ProjectGuid>
+    <RootNamespace>SoundRelayVirtualCamera</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)x64\$(Configuration)\</OutDir>
+    <TargetName>SoundRelayVirtualCamera</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>mfplat.lib;mfuuid.lib;mfsensorgroup.lib;ole32.lib;advapi32.lib;uuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="FrameChannel.cpp" />
+    <ClCompile Include="MediaSource.cpp" />
+    <ClCompile Include="MediaStream.cpp" />
+    <ClCompile Include="Transform.cpp" />
+    <ClCompile Include="VideoMediaType.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ComPtr.h" />
+    <ClInclude Include="FrameChannel.h" />
+    <ClInclude Include="FrameChannelCore.h" />
+    <ClInclude Include="MediaSource.h" />
+    <ClInclude Include="MediaStream.h" />
+    <ClInclude Include="SharedFrameChannel.h" />
+    <ClInclude Include="Transform.h" />
+    <ClInclude Include="VideoMediaType.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

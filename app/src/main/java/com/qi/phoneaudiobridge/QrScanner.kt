@@ -204,7 +204,7 @@ class QrScanner(
         }
     }
 
-    /** Re-arm after a rejected (non-SoundRelay) code so scanning continues. */
+    /** Re-arm after a rejected (non-LisTalk) code so scanning continues. */
     fun resume() {
         delivered = false
     }

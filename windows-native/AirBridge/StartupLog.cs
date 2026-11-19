@@ -56,7 +56,7 @@ public static class StartupLog
         try
         {
             string text = (Loc.IsZh ? zh : en) + "\n\n" + FilePath;
-            string caption = Loc.IsZh ? "声音接力 SoundRelay" : "SoundRelay";
+            string caption = Loc.IsZh ? "听说 LisTalk" : "LisTalk";
             _ = MessageBoxW(IntPtr.Zero, text, caption, icon);
         }
         catch { }

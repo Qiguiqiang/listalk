@@ -41,15 +41,24 @@ fun main() {
     expect(SubnetSweep.splitSpecs("192.168.88.0/24, 192.168.99.0/24\n10.0.0.0/24") ==
         listOf("192.168.88.0/24", "192.168.99.0/24", "10.0.0.0/24"), "spec splitting on comma/newline")
 
-    // ---- candidate ordering: local first, paired next, extras last; dedupe; cap ----
+    // ---- candidate ordering (discovery hardening, F9): PAIRED subnets
+    // first — a paired device's subnet must never be evicted by local
+    // (especially virtual/VPN) adapters — then physical local subnets,
+    // then virtual local subnets, then the user's extras; dedupe; cap.
     val local = listOf(ip("192.168.23.55"))
     val paired = listOf(ip("192.168.99.40"), ip("192.168.23.90")) // one remote, one local-subnet
     val extras = listOf("192.168.88.0/24", "192.168.23.0/24", "junk")
-    val cands = SubnetSweep.candidateSubnets(local, paired, extras)
-    expect(cands.map { fmt(it) } == listOf("192.168.23.0", "192.168.99.0", "192.168.88.0"),
-        "candidates ordered local>paired>extra, deduped, junk dropped: ${cands.map { fmt(it) }}")
+    val cands = SubnetSweep.candidateSubnets(local, emptyList(), paired, extras)
+    expect(cands.map { fmt(it) } == listOf("192.168.99.0", "192.168.23.0", "192.168.88.0"),
+        "candidates ordered paired>physical>extra, deduped, junk dropped: ${cands.map { fmt(it) }}")
+    val virt = listOf("172.16.0.2", "172.17.0.2", "172.18.0.2", "172.19.0.2", "172.20.0.2", "192.168.56.2").map { ip(it) }
+    val evict = SubnetSweep.candidateSubnets(listOf(ip("10.0.0.5")), virt, listOf(ip("192.168.99.40")), listOf("192.168.88.0/24"))
+    expect(evict.first() == ip("192.168.99.0") && ip("192.168.99.0") in evict,
+        "paired subnet survives a flood of virtual adapters: ${evict.map { fmt(it) }}")
+    expect(evict.size == SubnetSweep.MAX_SUBNETS, "cap still holds under virtual flood (${evict.size})")
+    expect(evict[1] == ip("10.0.0.0"), "physical local ranks above virtual locals: ${evict.map { fmt(it) }}")
     val many = (1..10).map { "10.0.$it.0/24" }
-    expect(SubnetSweep.candidateSubnets(emptyList(), emptyList(), many).size == SubnetSweep.MAX_SUBNETS,
+    expect(SubnetSweep.candidateSubnets(emptyList(), emptyList(), emptyList(), many).size == SubnetSweep.MAX_SUBNETS,
         "candidates capped at MAX_SUBNETS=${SubnetSweep.MAX_SUBNETS}")
 
     // ---- probe order: priority first, gateway-ish next, own IP skipped, no .0/.255 ----
@@ -67,7 +76,7 @@ fun main() {
 
     // ---- plan: round-robin batches respect the budget and interleave subnets ----
     val plan = SweepPlan()
-    val nets = SubnetSweep.candidateSubnets(local, paired, extras)
+    val nets = SubnetSweep.candidateSubnets(local, emptyList(), paired, extras)
     val prio = listOf(ip("192.168.99.40"))
     plan.reset(nets, prio, setOf(ip("192.168.23.55")))
     expect(plan.subnetCount == 3, "plan holds 3 candidate subnets")
@@ -75,7 +84,7 @@ fun main() {
     expect(total == 254 * 3 - 1, "total probes bounded: 3 subnets x 254 - own = $total")
     val batch = plan.nextBatch(30)
     expect(batch.size == 30, "batch respects budget (30)")
-    expect(batch.first() == ip("192.168.23.1"), "round-robin starts with first subnet's head")
+    expect(batch.first() == ip("192.168.99.40"), "round-robin starts with first (paired) subnet's priority head")
     expect(batch.contains(ip("192.168.99.40")), "paired priority host probed in the FIRST batch")
     // drain the cycle: every target probed exactly once, then complete
     val seen = HashSet<Int>(batch)

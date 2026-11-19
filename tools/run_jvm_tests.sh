@@ -28,6 +28,12 @@ KOTLINC="$HOME/tools/kotlinc/bin/kotlinc"
     app/src/main/java/com/qi/phoneaudiobridge/SubnetSweep.kt \
     tools/TestSweep.kt
 "$JAVA_HOME/bin/java" -cp "tools/sweep-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestSweepKt
+# discovery diagnostics core tests (hardening §5.4): per-channel counters,
+# paired-probe schedule, plain-language verdict selection.
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/diag-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/DiscoveryDiag.kt \
+    tools/TestDiag.kt
+"$JAVA_HOME/bin/java" -cp "tools/diag-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestDiagKt
 # PC-side loop detector scenarios (v2.2.3 FB-8): the Kotlin port of
 # LoopDetector.cs (tools/PcLoopDetector.kt) driven through music+AEC
 # residual, a genuine electric loop, and the probe-resume failsafe.
@@ -37,3 +43,26 @@ KOTLINC="$HOME/tools/kotlinc/bin/kotlinc"
     tools/PcLoopDetector.kt \
     tools/TestLoopPc.kt
 "$JAVA_HOME/bin/java" -cp "tools/looppc-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestLoopPcKt
+# volume mapping + SET_VOLUME packet tests (volume-stream fix, design
+# work-v2/android-volume-streams.md §3.4): TYPE_SET_VOLUME allocation and
+# the percent<->gain mapping both ends convert volume through.
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/volume-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/Protocol.kt \
+    tools/TestVolume.kt
+"$JAVA_HOME/bin/java" -cp "tools/volume-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestVolumeKt
+# video packet layer (wave 4, plan §B.2): types 12-15, the 10-byte
+# fragmentation subheader, packetize/depacketize round-trip and the
+# reassembler's in-order / 200 ms-loss / keyframe-needed behaviour.
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/video-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/Protocol.kt \
+    app/src/main/java/com/qi/phoneaudiobridge/VideoPackets.kt \
+    tools/TestVideo.kt
+"$JAVA_HOME/bin/java" -cp "tools/video-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestVideoKt
+# interaction policy (wave 3, plan Part A): the overlay stack behind the
+# three back channels, FB-12 density form rules + disconnect pruning +
+# compact ordering, pull-to-refresh eligibility, and the pairing-confirm
+# verification watch (B-05).
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/interaction-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/InteractionPolicy.kt \
+    tools/TestInteraction.kt
+"$JAVA_HOME/bin/java" -cp "tools/interaction-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestInteractionKt

@@ -11,7 +11,7 @@ import android.os.ParcelUuid
 import android.util.Log
 
 /**
- * BLE proximity discovery (v2): scans for the canonical SoundRelay service
+ * BLE proximity discovery (v2): scans for the canonical LisTalk service
  * UUID (Protocol.BLE_SERVICE_UUID). Sightings are used ONLY for presence /
  * proximity (RSSI) in the nearby-device list — audio always stays on WiFi.
  *

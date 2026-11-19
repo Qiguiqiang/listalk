@@ -58,5 +58,5 @@ if [ ! -f build-manual/debug.keystore ]; then
 fi
 "$BT/apksigner" sign --ks build-manual/debug.keystore \
     --ks-pass pass:android --key-pass pass:android \
-    --out SoundRelay-Android-v2.2.4.apk "$WORK/aligned.apk"
-echo "DONE: SoundRelay-Android-v2.2.4.apk"
+    --out LisTalk-Android-v2.3.0.apk "$WORK/aligned.apk"
+echo "DONE: LisTalk-Android-v2.3.0.apk"

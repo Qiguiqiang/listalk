@@ -13,7 +13,7 @@ public static class Protocol
 {
     public const int Port = 47731;
     /// <summary>Unified release versioning (Gray's rule): one release = same version both ends.</summary>
-    public const string AppVersion = "2.2.4";
+    public const string AppVersion = "2.3.0";
     public const int ProtoVersion = 2;
     public const ushort Magic = 0x5041;
     public const int HeaderSize = 16;
@@ -28,7 +28,23 @@ public static class Protocol
     public const byte TypeRateReq = 7;
     public const byte TypeRateAck = 8;
     public const byte TypeBye = 9;
+    /// <summary>PC → phone remote volume: JSON {"speakerVolume":0.0..1.0} sets this PC's
+    /// per-device speaker gain on the phone (the value its device-card slider edits).</summary>
+    public const byte TypeSetVolume = 10;
     public const byte TypeBeacon = 11;
+
+    // ---- camera relay (wave 4, plan §B.2): same port/header, negotiated via
+    // the "caps":["video1"] field in HELLO / HELLO_ACK — ProtoVersion stays 2.
+    /// <summary>Phone → PC, JSON {codec,width,height,fps,rotation,mirrored,lensFacing,csd(base64 SPS+PPS)}; sent x3 on (re)start.</summary>
+    public const byte TypeVideoConfig = 12;
+    /// <summary>Phone → PC, binary: 10-byte fragmentation subheader + H.264 AU chunk (see VideoPackets).</summary>
+    public const byte TypeVideoData = 13;
+    /// <summary>Both ways, JSON: PC {action:"start"/"stop", quality} / phone {action:"state", streaming, reason?}.</summary>
+    public const byte TypeVideoCtrl = 14;
+    /// <summary>PC → phone, empty: decoder needs a fresh IDR; phone rate-limits to >=500 ms.</summary>
+    public const byte TypeVideoKeyframeReq = 15;
+    /// <summary>Capability token for the camera relay, carried in HELLO / HELLO_ACK "caps".</summary>
+    public const string CapVideo1 = "video1";
 
     public const int CodecPcm16 = 0;
     public const int Rate48k = 0;
@@ -39,6 +55,14 @@ public static class Protocol
     public static int RateCodeForHz(int hz) => hz switch { 24000 => Rate24k, 16000 => Rate16k, _ => Rate48k };
     public static int FrameSamples(int code) => RateHz(code) / 100; // 10 ms
     public static int FrameBytes(int code) => FrameSamples(code) * 2;
+
+    /// <summary>The single volume mapping every surface converts through: PC UI sliders
+    /// speak percent (0–100), the phone's per-device gain is 0–1. Mirrors Android
+    /// Protocol.kt gainForPercent/percentForGain exactly (AwayFromZero == Kotlin
+    /// roundToInt for the non-negative range); pinned by tools/TestVolume.kt.</summary>
+    public static double GainForPercent(int percent) => Math.Clamp(percent, 0, 100) / 100.0;
+    public static int PercentForGain(double gain) =>
+        (int)Math.Round(Math.Clamp(gain, 0.0, 1.0) * 100.0, MidpointRounding.AwayFromZero);
     public static byte MakeFlags(int codec, int rateCode) => (byte)((codec & 0x03) | ((rateCode & 0x07) << 2));
 
     public static long NowUs() => Environment.TickCount64 * 1000L; // monotonic-ish; Stopwatch-based below is authoritative

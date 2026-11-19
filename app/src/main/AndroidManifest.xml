@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.qi.phoneaudiobridge"
-    android:versionName="2.2.4"
-    android:versionCode="224">
+    android:versionName="2.3.0"
+    android:versionCode="230">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Discovery hardening (F4): reliable broadcast/multicast reception
+         needs a WifiManager.MulticastLock — without it most WiFi chipsets
+         drop PC beacons/mDNS before they reach the app. ACCESS_WIFI_STATE
+         is required for the WifiLock held alongside it. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Camera relay (wave 4): Android 14 requires this permission for
+         the camera foreground-service type declared on BridgeService. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -28,8 +37,9 @@
 
     <application
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@drawable/ic_launcher"
-        android:label="声音接力 SoundRelay"
+        android:label="听说 LisTalk"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
@@ -50,6 +60,6 @@
         <service
             android:name=".BridgeService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|camera" />
     </application>
 </manifest>

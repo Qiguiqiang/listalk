@@ -2,14 +2,14 @@
 <resources>
     <string name="status_not_connected">未连接</string>
     <string name="action_settings">⚙ 设置</string>
-    <string name="app_tagline">让声音在电脑、手机和耳机之间自由接力</string>
+    <string name="app_tagline">让影音在电脑、手机和耳机之间自由接力</string>
     <string name="action_undo">撤销</string>
     <string name="action_connect">连接</string>
     <string name="action_ignore">忽略</string>
     <string name="action_switch_to_headset">切换到耳机</string>
     <string name="action_dismiss">不用</string>
     <string name="hero_not_started">还没开始</string>
-    <string name="hero_hint_first_run">先在电脑上打开声音接力 PC 端，再点下方「开始搜索」</string>
+    <string name="hero_hint_first_run">先在电脑上打开听说 PC 端，再点下方「开始搜索」</string>
     <string name="label_mic_to_pc">麦克风 → 电脑</string>
     <string name="label_pc_to_speaker">电脑 → 扬声器</string>
     <string name="stats_placeholder" formatted="false">丢包 --% · 抖动 -- ms · 缓冲 -- ms</string>
@@ -30,13 +30,15 @@
     <string name="loop_guard_note">⚠ 已拦截自身声音回放：电脑端的声音采集源可能包含了手机麦克风，请在电脑端改选采集设备</string>
     <string name="label_playback_volume">播放音量</string>
     <string name="action_start_search">开始搜索</string>
+    <string name="action_camera_relay_start">开启摄像头接力</string>
+    <string name="action_camera_relay_stop">停止摄像头接力</string>
     <string name="usb_hint">USB 连接同样自动识别，无需设置</string>
     <string name="action_torch">🔦 手电</string>
     <string name="scan_hint_aim">对准电脑屏幕上的二维码</string>
-    <string name="scan_hint_pc">电脑端打开声音接力，点「显示配对二维码」即可</string>
+    <string name="scan_hint_pc">电脑端打开听说，点「显示配对二维码」即可</string>
     <string name="scan_to_code_link">没有二维码？输入配对码 →</string>
     <string name="code_title">← 输入配对码</string>
-    <string name="code_hint">电脑端打开声音接力，点「显示配对码」，把 6 位数字输进来（配对码 10 分钟内有效）</string>
+    <string name="code_hint">电脑端打开听说，点「显示配对码」，把 6 位数字输进来（配对码 10 分钟内有效）</string>
     <string name="code_auto_hint">输入后会自动查找这台电脑…</string>
     <string name="action_find_and_pair">查找并配对</string>
     <string name="code_to_scan_link">用扫码更快 → 扫码配对</string>
@@ -55,7 +57,7 @@
     <string name="reconnect_never_label">从不自动（只在列表里显示，我手动连）</string>
     <string name="reconnect_note">短暂掉线（60 秒内）始终自动续连，不受此设置影响。每台电脑的「自动连接」开关在设备卡上，可单独关。</string>
     <string name="settings_background_title">后台运行</string>
-    <string name="settings_background_desc">开着时声音接力在后台/熄屏也能发现电脑并推流（前台服务）。关掉后只在打开 App 时运行。</string>
+    <string name="settings_background_desc">开着时听说在后台/熄屏也能发现电脑并推流（前台服务）。关掉后只在打开 App 时运行。</string>
     <string name="action_battery_guide">去关闭电池优化（防后台被杀）</string>
     <string name="settings_echo_title">回声抑制（手机端）</string>
     <string name="settings_output_title">声音输出</string>
@@ -82,7 +84,7 @@
     <string name="action_check_update">检查更新</string>
     <string name="discover_title">← 附近的电脑</string>
     <string name="discover_searching">正在探寻周边设备…</string>
-    <string name="discover_empty">还没探到电脑——确认电脑端声音接力已打开、蓝牙和 WiFi 都开着</string>
+    <string name="discover_empty">还没探到电脑——确认电脑端听说已打开、蓝牙和 WiFi 都开着</string>
     <string name="update_current_version">当前版本 %1$s</string>
     <string name="update_checking">正在检查更新…（当前版本 %1$s）</string>
     <string name="update_manifest_invalid">更新清单无效（内容无法解析）</string>
@@ -103,7 +105,7 @@
     <string name="update_verify_failed">更新包校验失败（SHA-256 不一致），已中止安装</string>
     <string name="update_downloaded_card">新版本 %1$s 下载完成并校验通过，正在打开安装器…</string>
     <string name="install_perm_title">需要安装权限</string>
-    <string name="install_perm_msg">请在系统设置里允许声音接力安装未知应用，然后回来重新检查更新。</string>
+    <string name="install_perm_msg">请在系统设置里允许听说安装未知应用，然后回来重新检查更新。</string>
     <string name="action_go_settings">去设置</string>
     <string name="installer_failed_toast">无法打开系统安装器：%1$s</string>
     <string name="update_summary_failed">失败：%1$s</string>
@@ -118,9 +120,9 @@
     <string name="mic_perm_toast">需要麦克风权限才能把声音送到电脑，授权后再点一次</string>
     <string name="scan_need_camera_perm_short">需要相机权限才能扫码——可以用下方「输入配对码」</string>
     <string name="scan_need_camera_perm_long">需要相机权限才能扫码——授权后重试，或用下方「输入配对码」</string>
-    <string name="scan_not_soundrelay_qr">这不是声音接力的配对二维码</string>
+    <string name="scan_not_soundrelay_qr">这不是听说的配对二维码</string>
     <string name="scan_different_pc_toast">扫到的不是这台电脑，已按扫到的设备配对</string>
-    <string name="engine_started_pairing_toast">声音接力已启动，正在配对…</string>
+    <string name="engine_started_pairing_toast">听说已启动，正在配对…</string>
     <string name="code_searching">正在查找这台电脑…</string>
     <string name="already_paired_banner">这台电脑已经配对过了</string>
     <string name="code_invalid_error">配对码不存在或已过期，请核对后重试</string>
@@ -138,7 +140,7 @@
     <string name="reconnect_banner">连接中断，正在重连…（第 %1$d 次）· 网络恢复后会自动继续推流</string>
     <string name="hero_live_eyebrow">● LIVE · 正在推流</string>
     <string name="hero_connected_title">已连接 %1$d 台电脑</string>
-    <string name="hero_paused_title">声音接力已暂停</string>
+    <string name="hero_paused_title">听说已暂停</string>
     <string name="hero_paused_sub">点下方「继续连接」或通知里的「继续」恢复</string>
     <string name="state_paused">已暂停</string>
     <string name="status_searching_pc">正在寻找你的电脑…</string>
@@ -176,7 +178,18 @@
     <string name="echo_ducking_suffix"> · 残留回声压制中</string>
     <string name="echo_howl_suffix"> · 啸叫保护 %1$d dB</string>
     <string name="section_my_pcs">我的电脑</string>
+    <string name="section_my_pcs_disconnected">我的电脑 · 未连接 %1$d</string>
     <string name="section_new_devices">新设备</string>
+    <string name="chip_online">在线</string>
+    <string name="chip_offline">未上线</string>
+    <string name="chip_connecting">连接中</string>
+    <string name="pull_refresh_pull">下拉重新搜索</string>
+    <string name="pull_refresh_release">松开重新搜索</string>
+    <string name="pull_refresh_refreshing">正在重新搜索…</string>
+    <string name="list_updated_toast">列表已更新</string>
+    <string name="confirm_verifying">正在与电脑确认…</string>
+    <string name="action_retry">重试</string>
+    <string name="connected_cannot_collapse_toast">已连接的设备不能收起，断开后会自动收起</string>
     <string name="badge_pc_version_mismatch">电脑端版本不一致</string>
     <string name="badge_connected">已连接</string>
     <string name="badge_auto_failed">自动连接失败 · 点按重试</string>
@@ -189,6 +202,7 @@
     <string name="switch_mic_to_this_pc">麦克风 → 这台电脑</string>
     <string name="switch_speaker_from_this_pc">电脑声音 → 手机扬声器</string>
     <string name="card_volume_label">这台的音量</string>
+    <string name="card_volume_note">相对微调 · 整体响度由系统媒体音量（音量键）决定</string>
     <string name="muted_label">静音</string>
     <string name="action_stop">停止</string>
     <string name="action_pair">配对</string>
@@ -197,6 +211,8 @@
     <string name="menu_rename">重命名</string>
     <string name="menu_pairing_info">查看配对信息</string>
     <string name="menu_forget">忘记这台电脑</string>
+    <string name="menu_pin">置顶</string>
+    <string name="menu_unpin">取消置顶</string>
     <string name="rename_title">重命名</string>
     <string name="rename_hint">给这台电脑起个名字</string>
     <string name="action_save">保存</string>
@@ -209,7 +225,7 @@
     <string name="last_seen_never">从未连接</string>
     <string name="last_seen_today">今天 %1$s</string>
     <string name="last_seen_yesterday">昨天 %1$s</string>
-    <string name="battery_ok">电池优化：已关闭，声音接力在后台不会被系统杀掉 ✓</string>
+    <string name="battery_ok">电池优化：已关闭，听说在后台不会被系统杀掉 ✓</string>
     <string name="battery_warn">电池优化：未关闭——后台运行可能被系统杀掉，建议关闭</string>
     <string name="output_state_format">当前输出：%1$s</string>
     <string name="output_headset_suffix"> · 耳机模式 · 回声风险低</string>
@@ -221,8 +237,8 @@
     <string name="output_auto_label">自动（跟随系统：有耳机用耳机，否则扬声器）</string>
     <string name="input_auto_label">自动（跟随系统）</string>
     <string name="input_device_mic_suffix">%1$s 麦克风</string>
-    <string name="bg_on_toast">已切换为后台运行：关掉 App 声音接力也继续工作</string>
-    <string name="bg_off_toast">已切换为仅前台运行：关闭 App 后声音接力会停止</string>
+    <string name="bg_on_toast">已切换为后台运行：关掉 App 听说也继续工作</string>
+    <string name="bg_off_toast">已切换为仅前台运行：关闭 App 后听说会停止</string>
     <string name="mic_mode_effective_toast">麦克风模式将在下次连接时生效</string>
     <string name="discover_status_format">探寻中：局域网广播 · %1$s · %2$s</string>
     <string name="source_lan">局域网</string>
@@ -238,7 +254,10 @@
     <string name="engine_status_network_changed">网络已切换，正在重新连接…</string>
     <string name="engine_status_stopped">已停止</string>
     <string name="engine_status_disconnected_reconnecting">与 %1$s 的连接中断，自动重连中…</string>
-    <string name="engine_status_isolated">能发现 %1$s，但连不上——路由器可能开启了设备隔离/访客网络</string>
+    <string name="engine_status_isolated">能发现 %1$s，但连不上——可能是路由器开启了设备隔离，也可能是电脑端防火墙拦截或未允许自动重连</string>
+    <string name="engine_status_wrong_network">当前默认网络不是家庭 WiFi（可能开着 VPN 或正在用移动数据）——局域网发现会失效</string>
+    <string name="engine_status_send_no_receive">一直在发出寻找信号，但从未收到任何回应——路由器可能拦截了局域网广播，或电脑不在同一网络</string>
+    <string name="engine_status_auto_paused">自动重连已暂停（多次尝试失败）——点设备卡片可立即重试</string>
     <string name="engine_status_reconnecting">正在重新连接…</string>
     <string name="engine_status_connecting">正在连接电脑…</string>
     <string name="device_speaker">本机扬声器</string>
@@ -268,9 +287,9 @@
     <string name="playout_diag_format">输出 %1$s · track %2$s · 已播 %3$d 帧 · 写错误 %4$d · 重建 %5$d · 路由重钉 %6$d · 通话音量 %7$d/%8$d</string>
     <string name="track_state_playing">播放中</string>
     <string name="track_state_unknown">未知</string>
-    <string name="notif_channel_name">声音接力 SoundRelay</string>
-    <string name="notif_title_paused">声音接力 SoundRelay 已暂停</string>
-    <string name="notif_title_running">声音接力 SoundRelay 运行中</string>
+    <string name="notif_channel_name">听说 LisTalk</string>
+    <string name="notif_title_paused">听说 LisTalk 已暂停</string>
+    <string name="notif_title_running">听说 LisTalk 运行中</string>
     <string name="notif_text_paused">已暂停：点「继续」恢复自动连接</string>
     <string name="notif_text_running">手机麦克风 → 电脑 · 电脑声音 → 手机</string>
     <string name="notif_action_resume">继续</string>

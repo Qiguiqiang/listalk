@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AirBridge.VideoPreviewWindow"
+        Title="摄像头预览 · Camera Preview"
+        Width="880" Height="560"
+        MinWidth="320" MinHeight="240">
+  <Grid Background="#0B0E13">
+    <Image Name="img" Stretch="Uniform" />
+    <TextBlock Name="placeholder"
+               Text="等待手机摄像头画面…"
+               Foreground="#9AA4B0" FontSize="15"
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Border VerticalAlignment="Bottom" Background="#99000000" Padding="10,6">
+      <TextBlock Name="status" Text="" Foreground="#D7DEE8" FontSize="12" />
+    </Border>
+  </Grid>
+</Window>

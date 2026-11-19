@@ -14,8 +14,8 @@
     <ApplicationIcon>airbridge.ico</ApplicationIcon>
     <AssemblyName>AirBridge</AssemblyName>
     <RootNamespace>AirBridge</RootNamespace>
-    <Product>声音接力 SoundRelay</Product>
-    <Version>2.2.4</Version>
+    <Product>听说 LisTalk</Product>
+    <Version>2.3.0</Version>
     <Company>Gray</Company>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>

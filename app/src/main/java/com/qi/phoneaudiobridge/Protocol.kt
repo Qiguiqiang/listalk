@@ -2,6 +2,7 @@ package com.qi.phoneaudiobridge
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
 
 /** Wire protocol shared with the PC app. See PROTOCOL.md. */
 object Protocol {
@@ -19,8 +20,31 @@ object Protocol {
     const val TYPE_RATE_REQ = 7
     const val TYPE_RATE_ACK = 8
     const val TYPE_BYE = 9
+    /**
+     * PC → phone remote volume (volume-stream fix): JSON {"speakerVolume":0.0..1.0}
+     * sets THIS PC's per-device speaker gain on the phone — the same value the
+     * phone's device-card slider edits (AudioEngine.setSpeakerVolume), applied
+     * at the same mix point. Fills the one free slot below TYPE_BEACON.
+     */
+    const val TYPE_SET_VOLUME = 10
     /** PC presence beacon, broadcast every 1 s: JSON {name, os, deviceId, tokenHash}. */
     const val TYPE_BEACON = 11
+
+    // ---- camera relay (wave 4, plan §B.2): same port, same 16-byte header.
+    // Negotiated via the "caps":["video1"] field in HELLO / HELLO_ACK —
+    // PROTO_VERSION deliberately stays 2 so old endpoints never misreport
+    // a version mismatch over an optional feature. ----
+    /** Phone → PC, JSON {codec,width,height,fps,rotation,mirrored,lensFacing,csd(base64 SPS+PPS)}; sent x3 on (re)start. */
+    const val TYPE_VIDEO_CONFIG = 12
+    /** Phone → PC, binary: 10-byte fragmentation subheader + H.264 AU chunk (see VideoPackets). */
+    const val TYPE_VIDEO_DATA = 13
+    /** Both ways, JSON: PC {action:"start"/"stop", quality} / phone {action:"state", streaming, reason?}. */
+    const val TYPE_VIDEO_CTRL = 14
+    /** PC → phone, empty: decoder needs a fresh IDR; phone rate-limits to >=500 ms. */
+    const val TYPE_VIDEO_KEYFRAME_REQ = 15
+
+    /** Capability token for the camera relay, carried in HELLO / HELLO_ACK "caps". */
+    const val CAP_VIDEO1 = "video1"
 
     /** Wire-protocol version exchanged in HELLO/HELLO_ACK (unified release versioning, v2). */
     const val PROTO_VERSION = 2
@@ -57,6 +81,16 @@ object Protocol {
 
     /** 10 ms frame length in samples for a rate code. */
     fun frameSamples(rateCode: Int): Int = rateHz(rateCode) / 100
+
+    /**
+     * The single volume mapping every surface converts through (design
+     * work-v2/android-volume-streams.md §3.4): PC UI sliders speak percent
+     * (0..100), the phone's per-device gain is 0..1. Mirrored exactly by
+     * Protocol.cs GainForPercent/PercentForGain; pinned by tools/TestVolume.kt.
+     */
+    fun gainForPercent(percent: Int): Float = percent.coerceIn(0, 100) / 100f
+
+    fun percentForGain(gain: Float): Int = (gain.coerceIn(0f, 1f) * 100).roundToInt()
 
     fun flags(codec: Int, rateCode: Int): Int = (codec and 0x03) or ((rateCode and 0x07) shl 2)
 

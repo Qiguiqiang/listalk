@@ -5,6 +5,7 @@
     android:background="#0B0E13">
 
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/homeScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0B0E13"
@@ -33,7 +34,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:text="声音接力 SoundRelay"
+                android:text="听说 LisTalk"
                 android:textColor="#F2F5F9"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -211,7 +212,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="SOUNDRELAY"
+                    android:text="LISTALK"
                     android:textColor="#5F6D80"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -667,6 +668,18 @@
             android:textSize="16sp"
             android:textStyle="bold" />
 
+        <!-- Camera relay toggle (wave 4 stage 1: minimal hook only;
+             the full camera UI is wave 3) -->
+        <Button
+            android:id="@+id/btnCameraRelay"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_btn_outline_sky"
+            android:text="@string/action_camera_relay_start"
+            android:textColor="#BFE3F5"
+            android:textSize="14sp" />
+
         <Button
             android:id="@+id/btnStop"
             android:layout_width="match_parent"
@@ -686,6 +699,26 @@
         
     </LinearLayout>
 </ScrollView>
+
+    <!-- Pull-to-refresh pill (wave 3, plan A.1.4): driven entirely from
+         MainActivity's touch observer on homeScroll; never clickable,
+         sits above home but below every overlay. -->
+    <TextView
+        android:id="@+id/tvPullRefresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_banner"
+        android:clickable="false"
+        android:focusable="false"
+        android:paddingStart="14dp"
+        android:paddingTop="7dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="7dp"
+        android:textColor="#9AA7B8"
+        android:textSize="12sp"
+        android:visibility="gone" />
 
     <!-- ===== Pairing overlay: QR scan (§4.2) ===== -->
     <FrameLayout
@@ -716,6 +749,9 @@
                     android:id="@+id/btnScanBack"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
+                    android:gravity="center"
                     android:padding="8dp"
                     android:text="←"
                     android:textColor="#F2F5F9"
@@ -734,6 +770,8 @@
                     android:id="@+id/btnTorch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:gravity="center_vertical"
                     android:padding="8dp"
                     android:text="@string/action_torch"
                     android:textColor="#9AA7B8"
@@ -796,6 +834,8 @@
             android:id="@+id/btnCodeBack"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:gravity="center_vertical"
             android:padding="4dp"
             android:text="@string/code_title"
             android:textColor="#F2F5F9"
@@ -1016,6 +1056,8 @@
                 android:id="@+id/btnSettingsBack"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:gravity="center_vertical"
                 android:padding="4dp"
                 android:text="@string/settings_title"
                 android:textColor="#F2F5F9"
@@ -1501,6 +1543,8 @@
                 android:id="@+id/btnDiscoverBack"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:gravity="center_vertical"
                 android:padding="4dp"
                 android:text="@string/discover_title"
                 android:textColor="#F2F5F9"

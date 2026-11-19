@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-source protocol consistency checker for SoundRelay.
+Cross-source protocol consistency checker for LisTalk.
 
 Extracts constants / formats / JSON keys from BOTH source trees (Android
 Kotlin + PC Python), PROTOCOL.md, and (when present) windows-native C#,
@@ -83,7 +83,12 @@ def main():
         ("TYPE_RATE_REQ", kt_const(proto_kt, "TYPE_RATE_REQ"), pab.TYPE_RATE_REQ, None),
         ("TYPE_RATE_ACK", kt_const(proto_kt, "TYPE_RATE_ACK"), pab.TYPE_RATE_ACK, None),
         ("TYPE_BYE", kt_const(proto_kt, "TYPE_BYE"), pab.TYPE_BYE, None),
+        ("TYPE_SET_VOLUME", kt_const(proto_kt, "TYPE_SET_VOLUME"), pab.TYPE_SET_VOLUME, None),
         ("TYPE_BEACON", kt_const(proto_kt, "TYPE_BEACON"), pab.TYPE_BEACON, None),
+        ("TYPE_VIDEO_CONFIG", kt_const(proto_kt, "TYPE_VIDEO_CONFIG"), pab.TYPE_VIDEO_CONFIG, None),
+        ("TYPE_VIDEO_DATA", kt_const(proto_kt, "TYPE_VIDEO_DATA"), pab.TYPE_VIDEO_DATA, None),
+        ("TYPE_VIDEO_CTRL", kt_const(proto_kt, "TYPE_VIDEO_CTRL"), pab.TYPE_VIDEO_CTRL, None),
+        ("TYPE_VIDEO_KEYFRAME_REQ", kt_const(proto_kt, "TYPE_VIDEO_KEYFRAME_REQ"), pab.TYPE_VIDEO_KEYFRAME_REQ, None),
         ("CODEC_PCM16", kt_const(proto_kt, "CODEC_PCM16"), pab.CODEC_PCM16, None),
         ("RATE_48K", kt_const(proto_kt, "RATE_48K"), pab.RATE_48K, None),
         ("RATE_24K", kt_const(proto_kt, "RATE_24K"), pab.RATE_24K, None),
@@ -125,7 +130,7 @@ def main():
     # Informational marker keys: carried in HELLO for the PC's UI/logging;
     # auth never depends on them (QR auth works via tokenHash), so the PC is
     # not required to read them — they must be documented in PROTOCOL.md.
-    INFORMATIONAL = {"pairQr", "pairTap", "appVersion", "protoVersion"}
+    INFORMATIONAL = {"pairQr", "pairTap", "appVersion", "protoVersion", "speakerVolume"}
     for key in ["name", "deviceId", "rate", "codec", "tokenHash", "pairCode", "pairQr"]:
         if key in INFORMATIONAL:
             if key in hello_keys_kt and key not in protocol_md:
@@ -174,7 +179,7 @@ def main():
     # ---- online-update canonical address ----
     m = re.search(r'DEFAULT_UPDATE_MANIFEST_URL\s*=\s*"([^"]+)"', update_kt)
     upd = m.group(1) if m else None
-    if upd != "https://raw.githubusercontent.com/Qiguiqiang/soundrelay/main/update.json":
+    if upd != "https://raw.githubusercontent.com/Qiguiqiang/listalk/main/update.json":
         fail(f"update manifest URL drift in UpdateChecker.kt: {upd!r}")
     elif upd not in protocol_md:
         fail("update manifest URL missing from PROTOCOL.md")
@@ -227,6 +232,33 @@ def main():
 
     # ---- v2.1 additions: unified version, live echo wiring, release hashes ----
     cs_proto = read(os.path.join(ROOT, "windows-native/AirBridge/Protocol.cs"))
+    # TYPE_SET_VOLUME parity across all three protocol sources + the
+    # speakerVolume payload key on both engines (volume-stream fix).
+    cs_engine = read(os.path.join(ROOT, "windows-native/AirBridge/BridgeEngine.cs"))
+    kt_setvol = kt_const(proto_kt, "TYPE_SET_VOLUME")
+    cs_setvol = re.search(r"TypeSetVolume\s*=\s*(\d+)", cs_proto)
+    if kt_setvol is not None and cs_setvol and int(cs_setvol.group(1)) == kt_setvol:
+        ok(f"TYPE_SET_VOLUME = {kt_setvol} (Kotlin == PC Python == windows-native C#)")
+    else:
+        fail(f"TYPE_SET_VOLUME drift: Kotlin={kt_setvol} C#={cs_setvol.group(1) if cs_setvol else None}")
+    if '"speakerVolume"' in engine_kt and '"speakerVolume"' in cs_engine and "speakerVolume" in protocol_md:
+        ok("speakerVolume key present: phone HELLO + SET_VOLUME handler, PC HELLO parse + send, PROTOCOL.md")
+    else:
+        fail("speakerVolume key missing on one of: AudioEngine.kt, BridgeEngine.cs, PROTOCOL.md")
+    # Camera relay (wave 4): the four video types pinned across all three
+    # protocol sources, and the caps negotiation present on both engines.
+    for kt_name, cs_name in [("TYPE_VIDEO_CONFIG", "TypeVideoConfig"), ("TYPE_VIDEO_DATA", "TypeVideoData"),
+                             ("TYPE_VIDEO_CTRL", "TypeVideoCtrl"), ("TYPE_VIDEO_KEYFRAME_REQ", "TypeVideoKeyframeReq")]:
+        kt_v = kt_const(proto_kt, kt_name)
+        cs_m = re.search(rf"{cs_name}\s*=\s*(\d+)", cs_proto)
+        if kt_v is not None and cs_m and int(cs_m.group(1)) == kt_v:
+            ok(f"{kt_name} = {kt_v} (Kotlin == PC Python == windows-native C#)")
+        else:
+            fail(f"{kt_name} drift: Kotlin={kt_v} C#={cs_m.group(1) if cs_m else None}")
+    if '"caps"' in engine_kt and '"caps"' in cs_engine and '"video1"' in protocol_md:
+        ok("caps/video1 negotiation present: phone HELLO, PC HELLO_ACK, PROTOCOL.md")
+    else:
+        fail("caps/video1 negotiation missing on one of: AudioEngine.kt, BridgeEngine.cs, PROTOCOL.md")
     cs_update = read(os.path.join(ROOT, "windows-native/AirBridge/Update.cs"))
     csproj = read(os.path.join(ROOT, "windows-native/AirBridge/AirBridge.csproj"))
     manifest_xml = read(os.path.join(ROOT, "app/src/main/AndroidManifest.xml"))
@@ -255,7 +287,7 @@ def main():
         ok("AudioEngine live path wired: echoProcessor.processCapture/pushPlayback + loopGuard.checkIncoming/pushSentMic")
     else:
         fail(f"AudioEngine live-path wiring incomplete: {wiring}")
-    for side, fname in [("android", "SoundRelay-Android-v2.2.4.apk"), ("windows", "SoundRelay-Setup-v2.2.4.exe")]:
+    for side, fname in [("android", "LisTalk-Android-v2.3.0.apk"), ("windows", "LisTalk-Setup-v2.3.0.exe")]:
         fpath = os.path.join(ROOT, "releases", fname)
         entry = rel_manifest.get(side, {})
         if not os.path.exists(fpath):

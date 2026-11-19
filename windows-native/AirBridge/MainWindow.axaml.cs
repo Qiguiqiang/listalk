@@ -43,6 +43,9 @@ public partial class MainWindow : Window
     private DateTime _lastPollUtc = DateTime.UtcNow;
     private long _lastRx, _lastTx;
     private string _lastListSig = "";
+    private System.Threading.Timer? _volSendTimer;
+    private bool _volSynced;        // phone volume pulled from HELLO for this session
+    private bool _userDisconnected; // B-08: session ended by the user — no reconnect UI
     private bool _chanSingle;
     private bool _everConnected;
     private DateTime? _disconnectedAtUtc;
@@ -77,12 +80,13 @@ public partial class MainWindow : Window
         _settings = AppSettings.Load();
         StartupLog.Stage("MainWindow: config + settings loaded");
         _engine = new BridgeEngine(_config, _settings);
+        _engine.VirtualCamera = new VirtualCameraService(_engine);
         _audio = new AudioService(_engine);
         _mdns = new MdnsDiscovery(_engine);
 
         InitializeComponent();
         StartupLog.Stage("MainWindow: XAML loaded");
-        Title = "声音接力 SoundRelay";
+        Title = "听说 LisTalk";
         try { Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://AirBridge/airbridge.ico"))); } catch { }
 
         _engine.Log += msg => Dispatcher.UIThread.Post(() => AppendLog(msg));
@@ -109,8 +113,22 @@ public partial class MainWindow : Window
             StartupLog.Error("BridgeEngine.Start", ex);
             AppendLog($"[服务] 桥接服务启动失败：{ex.Message}（启动日志见 %LOCALAPPDATA%\\AirBridge\\logs\\startup.log）");
         }
-        _mdns.Start();
-        _ble.Start(_config);
+        // FB-2 hardening, same rule as the engine start above (B-13):
+        // mDNS/BLE are optional discovery transports — a start failure
+        // degrades discovery (their Status strings keep saying 未启动 in
+        // the diagnostics row), it must never kill window construction.
+        try { _mdns.Start(); StartupLog.Stage("MainWindow: mDNS started"); }
+        catch (Exception ex)
+        {
+            StartupLog.Error("MdnsDiscovery.Start", ex);
+            AppendLog($"[发现] mDNS 启动失败（不影响广播发现）：{ex.Message}");
+        }
+        try { _ble.Start(_config); StartupLog.Stage("MainWindow: BLE advertiser started"); }
+        catch (Exception ex)
+        {
+            StartupLog.Error("BleAdvertiser.Start", ex);
+            AppendLog($"[发现] 蓝牙近感启动失败（不影响局域网发现）：{ex.Message}");
+        }
         StartAudioFromSelection();
         AutoStart.Apply(_settings.StartOnLogin);
 
@@ -170,13 +188,14 @@ public partial class MainWindow : Window
         btnSideUpdate.Click += (_, _) => OpenUpdateEntry();
     }
 
-    /// <summary>Cross-subnet sweep gate (v2.2.3 FB-6): the engine sweeps only
-    /// while the window is actually up (not tray-hidden/minimized) on the
-    /// Device or Discover page — the "discovery active" state.</summary>
+    /// <summary>Full-rate sweep hint: since the discovery hardening
+    /// (§5.5) the engine keeps sweeping at a reduced rate in the
+    /// background whenever a paired phone is unconnected, so page
+    /// navigation must not gate it any more — DiscoveryActive only
+    /// selects the full rate while the window is actually up.</summary>
     private void UpdateDiscoveryActive()
     {
-        _engine.DiscoveryActive = IsVisible && WindowState != WindowState.Minimized &&
-            (_page == Page.Device || _page == Page.Discover);
+        _engine.DiscoveryActive = IsVisible && WindowState != WindowState.Minimized;
     }
 
     private void ShowPage(Page p)
@@ -208,7 +227,7 @@ public partial class MainWindow : Window
         sideVersion.Text = "v" + UpdateChecker.CurrentVersion;
         navAboutVer.Text = "v" + UpdateChecker.CurrentVersion;
         tbAboutVer.Text = Loc.F("版本 v{0} · Windows 版", "Version v{0} · Windows", UpdateChecker.CurrentVersion);
-        tbSetFoot.Text = Loc.F("声音接力 SoundRelay v{0} · 设置保存在本机，不上传任何数据", "SoundRelay v{0} · Settings are stored locally — nothing is uploaded", UpdateChecker.CurrentVersion);
+        tbSetFoot.Text = Loc.F("听说 LisTalk v{0} · 设置保存在本机，不上传任何数据", "LisTalk v{0} · Settings are stored locally — nothing is uploaded", UpdateChecker.CurrentVersion);
         tbPortRun.Text = _config.Port.ToString();
         tbLocalChip.Text = Loc.F("本机 {0} · {1}", "This PC {0} · {1}", Environment.MachineName, BridgeEngine.LocalIp());
         tbAboutProto.Text = Loc.F("UDP · {0} · PCM16 · 协议 v{1}", "UDP · {0} · PCM16 · Protocol v{1}", _config.Port, Protocol.ProtoVersion);
@@ -225,7 +244,16 @@ public partial class MainWindow : Window
         {
             int v = (int)Math.Round(e.NewValue);
             volVal.Text = $"{v}%";
-            if (_uiReady) { _settings.PhoneVolumePercent = v; _settings.Save(); }
+            if (_uiReady)
+            {
+                _settings.PhoneVolumePercent = v; _settings.Save();
+                _volSynced = true; // an explicit user value supersedes the HELLO sync
+                // remote volume: trailing-edge throttle ~100 ms -> TYPE_SET_VOLUME
+                _volSendTimer?.Dispose();
+                _volSendTimer = new System.Threading.Timer(
+                    _ => Dispatcher.UIThread.Post(() => _engine.SendPhoneVolume(v)),
+                    null, 100, System.Threading.Timeout.Infinite);
+            }
         };
         UpdateChannelCards();
 
@@ -254,11 +282,21 @@ public partial class MainWindow : Window
         };
 
         // hero / service actions
-        btnDisconnect.Click += (_, _) => SetServiceRunning(false);
+        btnDisconnect.Click += (_, _) => DisconnectSession();
         btnStartService.Click += (_, _) => SetServiceRunning(true);
         btnGotoDiscover.Click += (_, _) => ShowPage(Page.Discover);
         btnToggleService.Click += (_, _) => SetServiceRunning(!_engine.Running);
         btnPause.Click += (_, _) => TogglePause();
+        SyncPauseLabels(); // B-03: labels mirror the persisted Paused from the start
+        btnRepairFirewall.Click += async (_, _) =>
+        {
+            btnRepairFirewall.IsEnabled = false;
+            AppendLog("[防火墙] 正在修复入站规则（将弹出 UAC 提权）…");
+            bool ok = await _engine.Firewall.RepairAsync();
+            AppendLog(ok ? "[防火墙] 入站规则已修复" : $"[防火墙] 修复未完成：{_engine.Firewall.Detail}");
+            btnRepairFirewall.IsEnabled = true;
+            Poll();
+        };
         btnRescan.Click += (_, _) =>
         {
             _discoverShownAt = DateTime.UtcNow;
@@ -377,11 +415,11 @@ public partial class MainWindow : Window
 
     private static void SetPickerTag(Border tag, TextBlock text, int score, bool sky)
     {
-        if (score >= 110) // own branded SoundRelay driver
+        if (score >= 110) // own branded LisTalk driver
         {
             tag.IsVisible = true;
             tag.Background = sky ? SkyDim : AccentDim;
-            text.Text = Loc.Tr("声音接力设备");
+            text.Text = Loc.Tr("听说设备");
             text.Foreground = sky ? new SolidColorBrush(Color.Parse("#45C7F2")) : Accent;
         }
         else if (score > 0)
@@ -440,7 +478,7 @@ public partial class MainWindow : Window
     {
         if (_selOutput is not null)
         {
-            tvOutBadge.Text = _selOutput.Score > 0 ? Loc.Tr("✓ 已自动识别虚拟声卡") : Loc.Tr("还没检测到虚拟声卡，其他软件将选不到手机麦克风（请安装声音接力虚拟音频设备或 VB-CABLE）");
+            tvOutBadge.Text = _selOutput.Score > 0 ? Loc.Tr("✓ 已自动识别虚拟声卡") : Loc.Tr("还没检测到虚拟声卡，其他软件将选不到手机麦克风（请安装听说虚拟音频设备或 VB-CABLE）");
             tvOutBadge.Foreground = _selOutput.Score > 0 ? Accent : Warn;
         }
         if (_selInput is not null)
@@ -469,7 +507,7 @@ public partial class MainWindow : Window
         IBrush pillBg, pillFg;
         if (own)
         {
-            desc = Loc.Tr("已安装 · 扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备），其他软件可直接选用");
+            desc = Loc.Tr("已安装 · 扬声器 / 麦克风（听说 LisTalk 虚拟音频设备），其他软件可直接选用");
             pill = Loc.Tr("正常工作"); pillBg = AccentDim; pillFg = Accent;
         }
         else if (cable)
@@ -479,7 +517,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            desc = Loc.Tr("未检测到虚拟音频设备：请安装声音接力虚拟音频设备组件，或安装 VB-CABLE 作为备用");
+            desc = Loc.Tr("未检测到虚拟音频设备：请安装听说虚拟音频设备组件，或安装 VB-CABLE 作为备用");
             pill = Loc.Tr("未安装"); pillBg = WarnDim; pillFg = Warn;
         }
         tvVdevDesc.Text = desc;
@@ -499,6 +537,20 @@ public partial class MainWindow : Window
             _config.Save();
         }
         catch (Exception ex) { AppendLog($"[音频] 启动失败：{ex.Message}"); }
+    }
+
+    /// <summary>B-08: 断开连接 ends only the current phone session; the
+    /// service (and discovery) keeps running — the Settings 停止服务
+    /// button is the one that stops everything, and it says so. The
+    /// _userDisconnected flag keeps Poll() out of the reconnect branch:
+    /// an intentional disconnect lands on the idle state, not on a
+    /// 120 s "reconnecting" fiction.</summary>
+    private void DisconnectSession()
+    {
+        _userDisconnected = true;
+        _engine.DisconnectSession();
+        AppendLog("[服务] 已断开当前手机会话（服务继续运行，手机可重新连接）");
+        Poll();
     }
 
     private void SetServiceRunning(bool run)
@@ -705,7 +757,7 @@ public partial class MainWindow : Window
             modalError.IsVisible = false;
             modalGo.IsEnabled = false; modalGo.Opacity = 0.55;
             modalLater.IsEnabled = false;
-            modalProgText.Text = Loc.F("正在下载 SoundRelay-Setup-v{0}.exe…", "Downloading SoundRelay-Setup-v{0}.exe…", info.Version);
+            modalProgText.Text = Loc.F("正在下载 LisTalk-Setup-v{0}.exe…", "Downloading LisTalk-Setup-v{0}.exe…", info.Version);
             modalProgPct.Text = "0%";
             progFill.Width = 0;
             progFill.Background = Tokens.B("ProgGradient");
@@ -759,7 +811,7 @@ public partial class MainWindow : Window
     // ---------------- tray / background ----------------
     private void SetupTray()
     {
-        _trayStatus = new NativeMenuItem(Loc.Tr("声音接力 SoundRelay · 未连接")) { IsEnabled = false };
+        _trayStatus = new NativeMenuItem(Loc.Tr("听说 LisTalk · 未连接")) { IsEnabled = false };
         var open = new NativeMenuItem(Loc.Tr("打开主窗口"));
         open.Click += (_, _) => ShowFromTray();
         _trayPause = new NativeMenuItem(Loc.Tr("暂停推流"));
@@ -769,10 +821,10 @@ public partial class MainWindow : Window
         _traySpk = new NativeMenuItem(Loc.Tr("电脑 → 扬声器")) { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = _settings.PcToPhone };
         _traySpk.Click += (_, _) => SetChannelFromTray(mic: false);
         _trayDisc = new NativeMenuItem(Loc.Tr("断开")) { IsEnabled = false };
-        _trayDisc.Click += (_, _) => SetServiceRunning(false);
+        _trayDisc.Click += (_, _) => DisconnectSession();
         var settings = new NativeMenuItem(Loc.Tr("设置…"));
         settings.Click += (_, _) => { ShowFromTray(); ShowPage(Page.Settings); };
-        var exit = new NativeMenuItem(Loc.Tr("退出声音接力"));
+        var exit = new NativeMenuItem(Loc.Tr("退出听说"));
         exit.Click += (_, _) => RequestExit();
         var menu = new NativeMenu();
         menu.Items.Add(_trayStatus);
@@ -787,7 +839,7 @@ public partial class MainWindow : Window
         menu.Items.Add(settings);
         menu.Items.Add(new NativeMenuItemSeparator());
         menu.Items.Add(exit);
-        _tray = new TrayIcon { ToolTipText = "声音接力 SoundRelay", Menu = menu };
+        _tray = new TrayIcon { ToolTipText = "听说 LisTalk", Menu = menu };
         try { _tray.Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://AirBridge/airbridge.ico"))); } catch { }
         _tray.Clicked += (_, _) => ShowFromTray();
         TrayIcon.SetIcons(Application.Current!, new TrayIcons { _tray });
@@ -845,10 +897,19 @@ public partial class MainWindow : Window
     {
         _settings.Paused = !_settings.Paused;
         _settings.Save();
-        btnPause.Content = _settings.Paused ? Loc.Tr("恢复桥接") : Loc.Tr("暂停桥接");
-        if (_trayPause is not null) _trayPause.Header = _settings.Paused ? Loc.Tr("恢复推流") : Loc.Tr("暂停推流");
+        SyncPauseLabels();
         AppendLog(_settings.Paused ? "[桥接] 已暂停（发现与配对仍在运行，音频已静默）" : "[桥接] 已恢复");
         Poll();
+    }
+
+    /// <summary>B-03: the pause labels live in two places (Settings button,
+    /// tray item) and must always mirror the persisted state — including
+    /// at startup, where TogglePause never ran and the XAML/tray constants
+    /// previously claimed "pause" while already paused.</summary>
+    private void SyncPauseLabels()
+    {
+        btnPause.Content = _settings.Paused ? Loc.Tr("恢复桥接") : Loc.Tr("暂停桥接");
+        if (_trayPause is not null) _trayPause.Header = _settings.Paused ? Loc.Tr("恢复推流") : Loc.Tr("暂停推流");
     }
 
     // ---------------- periodic UI ----------------
@@ -907,13 +968,31 @@ public partial class MainWindow : Window
                 {
                     tvBanner.Text = Loc.F("✓ 已连接 {0}", "✓ Connected to {0}", _engine.PeerName);
                     bannerInfo.IsVisible = true;
-                    if (_tray is not null) _tray.ToolTipText = Loc.F("声音接力 SoundRelay · 已连接 {0}", "SoundRelay · Connected to {0}", _engine.PeerName);
+                    if (_tray is not null) _tray.ToolTipText = Loc.F("听说 LisTalk · 已连接 {0}", "LisTalk · Connected to {0}", _engine.PeerName);
                 }
             }
             _wasConnected = true;
             _everConnected = true;
             _disconnectedAtUtc = null;
+            _userDisconnected = false; // a live session supersedes an earlier user disconnect
             _lastPeerName = _engine.PeerName;
+
+            // Phone volume (volume-streams §3b): once per session, when the
+            // phone has reported its gain in HELLO, pull the slider to the
+            // phone's value — the phone is the single source of truth.
+            // <0 (unpaired HELLO / pre-fix phone) leaves the persisted
+            // slider position untouched and sends nothing.
+            if (!_volSynced && _engine.PhoneSpeakerVolume >= 0)
+            {
+                int pv = Protocol.PercentForGain(_engine.PhoneSpeakerVolume);
+                if ((int)Math.Round(volSlider.Value) != pv)
+                {
+                    volSlider.Value = pv; // ValueChanged re-sends the same value — idempotent, harmless
+                    volVal.Text = $"{pv}%";
+                }
+                _settings.PhoneVolumePercent = pv; _settings.Save();
+                _volSynced = true;
+            }
 
             devStatusWord.Text = _settings.Paused ? Loc.Tr("已暂停") : Loc.Tr("推流中");
             devStatusWord.Foreground = Text1B;
@@ -925,9 +1004,13 @@ public partial class MainWindow : Window
 
             hero.IsVisible = true;
             heroEmpty.IsVisible = false;
+            // B-06: the eyebrow follows the real state — LIVE only while
+            // actually streaming, never through pause (or reconnect below).
+            heroEyebrow.Text = _settings.Paused ? Loc.Tr("已暂停 · 已连接手机") : Loc.Tr("● LIVE · 已连接手机");
+            heroEyebrow.Foreground = _settings.Paused ? Warn : Accent;
             heroName.Text = _engine.PeerName;
             heroSub.Text = $"{_engine.Peer?.Address} · {Protocol.RateHz(_engine.RateCode) / 1000} kHz" +
-                (_engine.PhoneAppVersion.Length > 0 ? Loc.F(" · 声音接力 App v{0}", " · SoundRelay App v{0}", _engine.PhoneAppVersion) : "");
+                (_engine.PhoneAppVersion.Length > 0 ? Loc.F(" · 听说 App v{0}", " · LisTalk App v{0}", _engine.PhoneAppVersion) : "");
             tbChipRate.Text = $"{Protocol.RateHz(_engine.RateCode) / 1000} kHz";
             if (s.RttMs >= 0)
             {
@@ -954,13 +1037,16 @@ public partial class MainWindow : Window
             int frameBytes = Protocol.FrameSamples(_engine.RateCode) * 2;
             statUp.Text = $"{(s.Rx - _lastRx) * frameBytes * 8.0 / dt / 1000:F0}";
             statDown.Text = $"{(s.Tx - _lastTx) * frameBytes * 8.0 / dt / 1000:F0}";
-            sideConnTitle.Text = Loc.F("推流中 · {0}", "Streaming · {0}", _engine.PeerName);
+            // B-03: while paused the sidebar must not claim 推流中 either.
+            sideConnTitle.Text = _settings.Paused
+                ? Loc.F("已暂停 · {0}", "Paused · {0}", _engine.PeerName)
+                : Loc.F("推流中 · {0}", "Streaming · {0}", _engine.PeerName);
             sideConnSub.Text = s.RttMs >= 0
                 ? $"UDP · {s.RttMs:F0} ms · {Protocol.RateHz(_engine.RateCode) / 1000} kHz"
                 : $"UDP · {Protocol.RateHz(_engine.RateCode) / 1000} kHz";
             chipMismatch.IsVisible = _engine.VersionMismatch;
         }
-        else if (_everConnected && _engine.Running &&
+        else if (_everConnected && _engine.Running && !_userDisconnected &&
                  (_wasConnected || (_disconnectedAtUtc is not null && (now - _disconnectedAtUtc.Value).TotalSeconds < 120)))
         {
             // spec §4 reconnect state: no page jump — status bar turns warn,
@@ -968,6 +1054,7 @@ public partial class MainWindow : Window
             if (_wasConnected) _disconnectedAtUtc = now;
             _wasConnected = false;
             _connectedSinceUtc = null;
+            _volSynced = false; // the next HELLO re-reports the phone gain
             devStatusWord.Text = Loc.Tr("重连中");
             devStatusWord.Foreground = Warn;
             devPulse.IsActive = true;
@@ -976,7 +1063,14 @@ public partial class MainWindow : Window
             devStatusInfo2.Text = Loc.Tr("手机回来会自动续连");
             hero.IsVisible = true;
             heroEmpty.IsVisible = false;
+            // B-06: no LIVE claim and no stale sub-line while the link is down.
+            heroEyebrow.Text = Loc.Tr("重连中 · 连接中断");
+            heroEyebrow.Foreground = Warn;
             heroName.Text = _lastPeerName;
+            heroSub.Text = Loc.Tr("连接中断 · 正在重连，手机回来会自动续连");
+            // B-07: the strip must not present pre-drop numbers as current.
+            statLoss.Text = "--"; statJitter.Text = "--"; statBuffer.Text = "--";
+            statUp.Text = "--"; statDown.Text = "--";
             latNum.Text = "—";
             latWord.Text = Loc.Tr(" · 重连中");
             latNum.Foreground = Warn; latWord.Foreground = Warn;
@@ -987,23 +1081,24 @@ public partial class MainWindow : Window
             sideConnSub.Text = Loc.Tr("连接中断，正在重连…");
             chipMismatch.IsVisible = false;
             bannerInfo.IsVisible = false;
-            if (_tray is not null && _settings.Notifications) _tray.ToolTipText = Loc.Tr("声音接力 SoundRelay · 重连中");
+            if (_tray is not null && _settings.Notifications) _tray.ToolTipText = Loc.Tr("听说 LisTalk · 重连中");
         }
         else
         {
             _wasConnected = false;
             _connectedSinceUtc = null;
+            _volSynced = false;
             devStatusWord.Text = _engine.Running ? Loc.Tr("未连接") : Loc.Tr("服务未启动");
             devStatusWord.Foreground = Text1B;
             devPulse.IsActive = false;
             sidePulse.IsActive = false;
-            devStatusInfo1.Text = _engine.Running ? Loc.Tr("等待手机打开声音接力") : Loc.Tr("服务已停止");
+            devStatusInfo1.Text = _engine.Running ? Loc.Tr("等待手机打开听说") : Loc.Tr("服务已停止");
             devStatusInfo2.Text = Loc.F("本机 IP {0}", "This PC IP {0}", BridgeEngine.LocalIp());
             hero.IsVisible = false;
             heroEmpty.IsVisible = true;
             heroEmptyTitle.Text = _engine.Running ? Loc.Tr("等待手机连接") : Loc.Tr("服务已停止");
             heroEmptyDesc.Text = _engine.Running
-                ? Loc.F("在手机上打开声音接力即可自动找到这台电脑 · 本机 IP：{0}", "Open SoundRelay on your phone and it will find this PC automatically · This PC IP: {0}", BridgeEngine.LocalIp())
+                ? Loc.F("在手机上打开听说即可自动找到这台电脑 · 本机 IP：{0}", "Open LisTalk on your phone and it will find this PC automatically · This PC IP: {0}", BridgeEngine.LocalIp())
                 : Loc.Tr("桥接服务已停止，手机无法发现这台电脑");
             btnStartService.IsVisible = !_engine.Running;
             btnGotoDiscover.IsVisible = _engine.Running;
@@ -1014,7 +1109,7 @@ public partial class MainWindow : Window
             sideConnSub.Text = _engine.Running ? Loc.Tr("等待手机连接") : Loc.Tr("服务未启动");
             chipMismatch.IsVisible = false;
             bannerInfo.IsVisible = false;
-            if (_tray is not null && _settings.Notifications) _tray.ToolTipText = Loc.Tr("声音接力 SoundRelay · 等待手机连接");
+            if (_tray is not null && _settings.Notifications) _tray.ToolTipText = Loc.Tr("听说 LisTalk · 等待手机连接");
         }
         _lastRx = s.Rx; _lastTx = s.Tx;
 
@@ -1042,9 +1137,13 @@ public partial class MainWindow : Window
             pillVersionsText.Foreground = Accent;
         }
         if (_trayStatus is not null)
+            // B-03: the tray status item follows the same paused truth as
+            // the sidebar — 推流中 only while actually streaming.
             _trayStatus.Header = _engine.Connected
-                ? Loc.F("声音接力 SoundRelay · 推流中 · {0} · {1} ms", "SoundRelay · Streaming · {0} · {1} ms", _engine.PeerName, s.RttMs.ToString("F0"))
-                : Loc.Tr("声音接力 SoundRelay · 未连接");
+                ? _settings.Paused
+                    ? Loc.F("听说 LisTalk · 已暂停 · {0}", "LisTalk · Paused · {0}", _engine.PeerName)
+                    : Loc.F("听说 LisTalk · 推流中 · {0} · {1} ms", "LisTalk · Streaming · {0} · {1} ms", _engine.PeerName, s.RttMs.ToString("F0"))
+                : Loc.Tr("听说 LisTalk · 未连接");
         if (_trayDisc is not null)
         {
             _trayDisc.Header = _engine.Connected ? Loc.F("断开 {0}", "Disconnect {0}", _engine.PeerName) : Loc.Tr("断开");
@@ -1052,7 +1151,14 @@ public partial class MainWindow : Window
         }
         btnToggleService.Content = _engine.Running ? Loc.Tr("停止服务") : Loc.Tr("启动服务");
         tvSvcDesc.Text = _engine.Running ? Loc.Tr("服务运行中 · 关闭窗口将最小化到托盘（可在设置里关掉）") : Loc.Tr("服务已停止 · 手机无法发现这台电脑");
-        tvDiscoveryStatus.Text = Loc.F("发现层：UDP 广播/信标 已运行 · mDNS {0} · BLE {1}", "Discovery: UDP broadcast/beacon running · mDNS {0} · BLE {1}", _mdns.Status, _ble.Status);
+        // R-W10 (first half): the UDP claim follows the engine state
+        // instead of being a constant, and the wave-1 health line
+        // (per-channel counters + verdict + firewall state) rides along
+        // so "why is nothing found" is answerable from this row.
+        tvDiscoveryStatus.Text = Loc.F("发现层：UDP 广播/信标 {0} · mDNS {1} · BLE {2}", "Discovery: UDP broadcast/beacon {0} · mDNS {1} · BLE {2}",
+                _engine.Running ? Loc.Tr("已运行") : Loc.Tr("未运行"), _mdns.Status, _ble.Status)
+            + "\n" + _engine.DiscoveryHealthText;
+        btnRepairFirewall.IsVisible = _engine.Firewall.CurrentState != FirewallGuard.State.Ok;
         tbScanInfo.Text = Loc.F("通过局域网广播、mDNS 与蓝牙近感三路并行查找 · 已扫描 {0} 秒", "Searching via LAN broadcast, mDNS and Bluetooth proximity · {0} s elapsed", (int)(now - _discoverShownAt).TotalSeconds);
 
         RebuildDeviceLists();

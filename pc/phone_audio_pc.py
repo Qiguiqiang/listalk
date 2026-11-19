@@ -51,7 +51,15 @@ TYPE_PONG = 6
 TYPE_RATE_REQ = 7
 TYPE_RATE_ACK = 8
 TYPE_BYE = 9
+TYPE_SET_VOLUME = 10  # PC -> phone: JSON {"speakerVolume":0.0..1.0} per-device speaker gain
 TYPE_BEACON = 11  # PC presence beacon, 1/s broadcast: {name, os, deviceId, tokenHash}
+# Camera relay (wave 4, plan §B.2): negotiated via HELLO/HELLO_ACK
+# "caps":["video1"] — PROTO_VERSION stays 2.
+TYPE_VIDEO_CONFIG = 12  # phone -> PC: JSON {codec,width,height,fps,rotation,mirrored,lensFacing,csd}
+TYPE_VIDEO_DATA = 13    # phone -> PC: 10-byte frag subheader + H.264 AU chunk
+TYPE_VIDEO_CTRL = 14    # both ways: JSON {action:"start"/"stop"/"state", ...}
+TYPE_VIDEO_KEYFRAME_REQ = 15  # PC -> phone: empty, request an IDR (>=500 ms apart)
+CAP_VIDEO1 = "video1"
 
 CODEC_PCM16 = 0
 CODEC_OPUS_RESERVED = 1  # v2 only
@@ -407,6 +415,142 @@ def pick_device(sd, kind, explicit_index=None):
 # Bridge engine
 # --------------------------------------------------------------------------
 
+class VideoReassembler:
+    """In-order H.264 access-unit reassembler for VIDEO_DATA (plan §B.2).
+
+    Mirror of the Kotlin VideoReassembler (VideoPackets.kt): fragments
+    are collected per frameId, AUs are emitted strictly in frameId
+    order, a frame incomplete after 200 ms (or missing entirely while
+    later frames complete) is dropped whole and raises keyframe_needed.
+    The clock is injected (seconds, monotonic) so tests can drive time.
+    """
+
+    DEADLINE_S = 0.200
+    MAX_FRAGS = 2048
+    MAX_IN_FLIGHT = 4
+    MAX_AU_BYTES = 2_000_000
+    SUBHEADER = struct.Struct("!IHHBB")  # frameId, fragIndex, fragCount, flags, codec
+    FLAG_KEYFRAME = 0x01
+    FLAG_FRAME_END = 0x02
+
+    def __init__(self):
+        self.dropped_frames = 0
+        self.completed_frames = 0
+        self.keyframe_needed = False
+        self._partials = {}   # frameId -> [fragCount, firstSeenS, {idx: bytes}, nbytes]
+        self._completed = {}  # frameId -> bytes
+        self._next = None     # next frameId to emit
+        self._gap_since = -1.0
+
+    def reset(self):
+        self.__init__()
+
+    def offer_payload(self, payload, now_s):
+        """Feed one VIDEO_DATA payload (subheader + chunk). Returns the
+        list of access units that became emittable, in frameId order."""
+        if len(payload) < self.SUBHEADER.size:
+            return self.expire(now_s)
+        frame_id, frag_index, frag_count, _flags, _codec = self.SUBHEADER.unpack_from(payload)
+        return self.offer(frame_id, frag_index, frag_count, payload[self.SUBHEADER.size:], now_s)
+
+    def offer(self, frame_id, frag_index, frag_count, data, now_s):
+        out = self._advance(now_s)
+        if frag_count <= 0 or frag_count > self.MAX_FRAGS:
+            return out
+        if frag_index < 0 or frag_index >= frag_count:
+            return out
+        if self._next is None:
+            self._next = frame_id
+        elif frame_id < self._next:
+            return out  # late / duplicate of an emitted or dropped frame
+        if frame_id not in self._completed:
+            p = self._partials.get(frame_id)
+            if p is None:
+                p = [frag_count, now_s, {}, 0]
+                self._partials[frame_id] = p
+            if p[0] != frag_count:
+                return out  # inconsistent fragment: ignore
+            if frag_index not in p[2]:
+                if p[3] + len(data) > self.MAX_AU_BYTES:
+                    return out  # poisoned frame: let the deadline reap it
+                p[2][frag_index] = data
+                p[3] += len(data)
+                if len(p[2]) == p[0]:
+                    del self._partials[frame_id]
+                    self._completed[frame_id] = b"".join(p[2][i] for i in range(p[0]))
+            self._evict_overflow()
+        out += self._advance(now_s)
+        self._note_gap(now_s)
+        return out
+
+    def expire(self, now_s):
+        out = self._advance(now_s)
+        self._note_gap(now_s)
+        return out
+
+    def _note_drop(self):
+        self.dropped_frames += 1
+        self.keyframe_needed = True
+
+    def _advance(self, now_s):
+        out = []
+        while self._next is not None:
+            ne = self._next
+            done = self._completed.pop(ne, None)
+            if done is not None:
+                out.append(done)
+                self.completed_frames += 1
+                self._next = ne + 1
+                self._gap_since = -1.0
+                continue
+            p = self._partials.get(ne)
+            if p is not None:
+                if now_s - p[1] > self.DEADLINE_S:
+                    del self._partials[ne]
+                    self._note_drop()
+                    self._next = ne + 1
+                    self._gap_since = -1.0
+                    continue
+                break  # blocking frame still within its deadline
+            has_higher = any(k > ne for k in self._partials) or any(k > ne for k in self._completed)
+            if not has_higher:
+                break
+            if self._gap_since < 0:
+                self._gap_since = now_s
+                break
+            if now_s - self._gap_since > self.DEADLINE_S:
+                self._note_drop()
+                self._next = ne + 1
+                self._gap_since = -1.0
+                continue
+            break
+        stale = [k for k, p in self._partials.items()
+                 if k != self._next and now_s - p[1] > self.DEADLINE_S]
+        for k in stale:
+            del self._partials[k]
+            self._note_drop()
+        return out
+
+    def _note_gap(self, now_s):
+        ne = self._next
+        if ne is None or self._gap_since >= 0:
+            return
+        if ne in self._partials or ne in self._completed:
+            return
+        if any(k > ne for k in self._partials) or any(k > ne for k in self._completed):
+            self._gap_since = now_s
+
+    def _evict_overflow(self):
+        while len(self._partials) > self.MAX_IN_FLIGHT:
+            oldest = min(self._partials)
+            del self._partials[oldest]
+            self._note_drop()
+            if self._next == oldest:
+                rest = list(self._partials) + list(self._completed)
+                self._next = min(rest) if rest else oldest + 1
+                self._gap_since = -1.0
+
+
 class Bridge:
     def __init__(self, port=PORT, input_device=None, output_device=None,
                  device_id="", token="", paired_phones=None, pair_code_fn=None,
@@ -443,6 +587,16 @@ class Bridge:
         self._in_built_rate = -1
         self._out_built_rate = -1
         self._lock = threading.Lock()
+        # camera relay (wave 4): negotiated caps, stream state, and the
+        # reassembled-Annex-B dump (video-capture.h264 in the cwd) that
+        # makes this reference peer usable as a real-LAN verification end.
+        self.phone_video_capable = False
+        self.video_config = None
+        self.video_reasm = VideoReassembler()
+        self.video_packets = 0
+        self.video_aus = 0
+        self._video_dump = None
+        self._last_keyframe_req = 0.0
 
     # -- socket helpers ----------------------------------------------------
     def _send(self, ptype, payload=b"", seq=0, ts=None, rate_code=None, addr=None):
@@ -569,6 +723,8 @@ class Bridge:
                 self.connected = True
                 self._last_rx = time.monotonic()
                 self.peer_name = info.get("name", "?")
+                caps = info.get("caps")
+                self.phone_video_capable = isinstance(caps, list) and CAP_VIDEO1 in caps
                 want = HZ_RATE.get(int(info.get("rate", 48000)))
                 if want is not None and want != self.rate_code:
                     self._apply_rate(want)
@@ -578,6 +734,7 @@ class Bridge:
                     "deviceId": self.device_id,
                     "name": socket.gethostname(),
                     "os": platform.system(),
+                    "caps": [CAP_VIDEO1],
                 }
                 if issue_token:
                     self.paired_phones[phone_id] = {
@@ -620,6 +777,54 @@ class Bridge:
             elif t == TYPE_BYE:
                 print("[断开] 手机端已停止，等待重新连接…")
                 self.connected = False
+            elif t == TYPE_VIDEO_CONFIG:
+                try:
+                    self.video_config = json.loads(payload.decode("utf-8", "replace"))
+                except ValueError:
+                    self.video_config = None
+                self.video_reasm.reset()
+                self.video_packets = 0
+                self.video_aus = 0
+                if self._video_dump is not None:
+                    self._video_dump.close()
+                self._video_dump = open("video-capture.h264", "wb")
+                cfg = self.video_config or {}
+                print(f"[视频] VIDEO_CONFIG {cfg.get('width')}x{cfg.get('height')}@{cfg.get('fps')} "
+                      f"codec={cfg.get('codec')} rotation={cfg.get('rotation')} mirrored={cfg.get('mirrored')}")
+            elif t == TYPE_VIDEO_DATA:
+                self.video_packets += 1
+                self._last_rx = time.monotonic()
+                for au in self.video_reasm.offer_payload(payload, time.monotonic()):
+                    self.video_aus += 1
+                    if self._video_dump is not None:
+                        self._video_dump.write(au)
+                        self._video_dump.flush()
+                if self.video_reasm.keyframe_needed and time.monotonic() - self._last_keyframe_req >= 0.5:
+                    self._last_keyframe_req = time.monotonic()
+                    self.video_reasm.keyframe_needed = False
+                    self._send(TYPE_VIDEO_KEYFRAME_REQ, addr=addr)
+            elif t == TYPE_VIDEO_CTRL:
+                try:
+                    ctrl = json.loads(payload.decode("utf-8", "replace"))
+                except ValueError:
+                    ctrl = {}
+                print(f"[视频] VIDEO_CTRL from phone: {ctrl}")
+
+    # -- camera relay control (wave 4) --------------------------------------
+    def start_video(self, quality="720p"):
+        """Ask the phone to start its camera relay (VIDEO_CTRL start).
+        Only meaningful when the phone advertised caps ["video1"]."""
+        if not self.phone_video_capable or self.peer is None:
+            return False
+        payload = json.dumps({"action": "start", "quality": quality}).encode("utf-8")
+        self._send(TYPE_VIDEO_CTRL, payload=payload)
+        return True
+
+    def stop_video(self):
+        if self.peer is None:
+            return
+        payload = json.dumps({"action": "stop"}).encode("utf-8")
+        self._send(TYPE_VIDEO_CTRL, payload=payload)
 
     def _capture_loop(self, sd):
         """PC sound (selected INPUT device) -> phone speaker."""

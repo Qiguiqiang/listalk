@@ -1,12 +1,17 @@
 package com.qi.phoneaudiobridge
 
 import android.Manifest
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.database.ContentObserver
+import android.provider.Settings
 import android.graphics.Color
 import android.media.AudioManager
 import android.os.Build
@@ -16,13 +21,17 @@ import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
@@ -37,7 +46,7 @@ import kotlin.math.log10
 import kotlin.math.roundToInt
 
 /**
- * 声音接力 SoundRelay — multi-PC home (UI_SPEC.md + UI_SPEC_MULTIDEVICE.md):
+ * 听说 LisTalk — multi-PC home (UI_SPEC.md + UI_SPEC_MULTIDEVICE.md):
  * overview hero, one card per PC (three states, per-device toggles,
  * auto-connect switch that stays live on offline cards), unpaired rows,
  * add-a-PC card, and the pairing overlays (QR scan / 6-digit code /
@@ -86,6 +95,7 @@ class MainActivity : Activity() {
     private lateinit var tvNoDevice: TextView
     private lateinit var tvElapsed: TextView
     private lateinit var btnStart: Button
+    private lateinit var btnCameraRelay: Button
 
     // settings + discovery overlays (v2.1)
     private lateinit var overlaySettings: LinearLayout
@@ -112,6 +122,22 @@ class MainActivity : Activity() {
     private val micSegs = ArrayList<View>()
     private val spkSegs = ArrayList<View>()
     private val handler = Handler(Looper.getMainLooper())
+
+    // Playback-volume slider (volume-stream fix): bound to the system
+    // MEDIA stream — the same index the hardware keys move. The observer
+    // keeps the slider following key/panel changes (it previously bound
+    // the voice-call stream and was initialized once, never refreshed).
+    private var seekPlaybackVolume: SeekBar? = null
+    private val volumeObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) { refreshPlaybackVolumeSeek() }
+    }
+
+    private fun refreshPlaybackVolumeSeek() {
+        val seek = seekPlaybackVolume ?: return
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (seek.progress != cur) seek.progress = cur
+    }
     private var polling = false
     private var connectedSinceMs = 0L
     private var searchStartMs = 0L
@@ -132,10 +158,55 @@ class MainActivity : Activity() {
     private var confirmIp: String? = null
     private var confirmShown = false
 
+    // ---- wave 3 interaction layer (plan Part A) ----
+    // The single overlay stack behind all three back channels; the pure
+    // rules live in InteractionPolicy (JVM-tested).
+    private val overlayStack = InteractionPolicy.OverlayStack()
+    private val overlayInterpolator = PathInterpolator(0.3f, 0.8f, 0.35f, 1f)
+    // Registered (API 33+) only while an overlay is open — at home the
+    // system default back behaviour applies (plan A.1.2). Held as Any
+    // because the callback classes do not exist below API 33.
+    private var backInvokedCallback: Any? = null
+    private var backGestureView: View? = null
+
+    // FB-12 density: ids the user manually expanded (exclusive — at most
+    // one), the previous poll's connected set (for disconnect pruning),
+    // the last rendered form per device (for transition fades), and a
+    // pending height animation for a manual expand/collapse.
+    private var manualExpandedIds: MutableSet<String> = mutableSetOf()
+    private var prevConnectedIds: Set<String> = emptySet()
+    private var lastForms = HashMap<String, InteractionPolicy.DeviceForm>()
+    private var pendingFormAnim: Pair<String, Int>? = null
+    private var listAnimUntilMs = 0L
+    private var anyConnectedNow = false
+
+    // Pull-to-refresh (A.1.4): pill view + in-flight bookkeeping. The
+    // refresh completes when the nearby set changes and then settles,
+    // or after a 3 s timeout — whichever comes first.
+    private lateinit var homeScroll: ScrollView
+    private lateinit var tvPullRefresh: TextView
+    private var pullRefreshing = false
+    private var pullRefreshStartMs = 0L
+    private var pullRefreshSettledSinceMs = 0L
+
+    // B-05 verification watch: after the user taps 确认配对, the pairing
+    // only counts as succeeded once the session demonstrably stays up
+    // for InteractionPolicy.VERIFY_OK_MS (see pollPairingProgress).
+    private var confirmVerifyIp: String? = null
+    private var confirmVerifyStartMs = 0L
+    private var confirmVerifyFailed = false
+    private var confirmVerifyName: String = ""
+    private var confirmVerifyAuto: Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AudioEngine.attachContext(applicationContext)
         setContentView(R.layout.activity_main)
+        // Foreground fallback (design §3.3 scheme D): while this Activity
+        // is up, the hardware volume keys target the media stream — the
+        // stream playback actually rides — even on OEMs that would
+        // otherwise pin the keys to the voice-call stream in comm mode.
+        volumeControlStream = AudioManager.STREAM_MUSIC
         bindViews()
         buildMeter(meterMic, micSegs)
         buildMeter(meterSpk, spkSegs)
@@ -144,7 +215,277 @@ class MainActivity : Activity() {
         wireSettingsUi()
         wireDiscoverUi()
         wireUpdateUi()
+        wirePullToRefresh()
         checkUpdate(manual = false)
+    }
+
+    // ---------------- wave 3: overlay stack + back channels ----------------
+
+    private fun overlayView(o: InteractionPolicy.Overlay): View = when (o) {
+        InteractionPolicy.Overlay.SETTINGS -> overlaySettings
+        InteractionPolicy.Overlay.DISCOVER -> overlayDiscover
+        InteractionPolicy.Overlay.SCAN -> overlayScan
+        InteractionPolicy.Overlay.CODE -> overlayCode
+        InteractionPolicy.Overlay.CONFIRM -> overlayConfirm
+    }
+
+    /** Show one overlay — any other closes instantly (the stack holds
+     *  exactly one, plan A.1.1) — with the standard 260 ms slide/fade-in. */
+    private fun showOverlay(o: InteractionPolicy.Overlay) {
+        overlayStack.show(o)
+        for (kind in InteractionPolicy.Overlay.values()) {
+            val v = overlayView(kind)
+            v.animate().cancel()
+            if (kind == o) {
+                v.visibility = View.VISIBLE
+                v.alpha = 0f
+                v.translationX = dp(16).toFloat()
+                v.animate().alpha(1f).translationX(0f)
+                    .setDuration(260).setInterpolator(overlayInterpolator).start()
+            } else {
+                v.visibility = View.GONE
+                v.alpha = 1f
+                v.translationX = 0f
+            }
+        }
+        syncBackCallbackRegistration()
+    }
+
+    /** Close every overlay immediately (success paths that already ran
+     *  their own side effects, e.g. finishConfirmSuccess). */
+    private fun hideAllOverlays() {
+        overlayStack.clear()
+        for (kind in InteractionPolicy.Overlay.values()) {
+            val v = overlayView(kind)
+            v.animate().cancel()
+            v.visibility = View.GONE
+            v.alpha = 1f
+            v.translationX = 0f
+        }
+        syncBackCallbackRegistration()
+    }
+
+    /** Back on the top overlay: per-overlay side effects first, then the
+     *  260 ms slide/fade-out (plan A.1.3 level 1 + A.1.5). */
+    private fun closeTopOverlay() {
+        val top = overlayStack.back() ?: return
+        applyOverlayCloseSideEffects(top)
+        val v = overlayView(top)
+        v.animate().cancel()
+        v.animate().alpha(0f).translationX(dp(16).toFloat())
+            .setDuration(260).setInterpolator(overlayInterpolator)
+            .withEndAction {
+                // A reopen during the out-animation wins: only settle
+                // into GONE if this view is not the current overlay.
+                if (overlayStack.current?.let { overlayView(it) } != v) {
+                    v.visibility = View.GONE
+                    v.alpha = 1f
+                    v.translationX = 0f
+                }
+            }
+            .start()
+        syncBackCallbackRegistration()
+    }
+
+    /** What "leaving this overlay via Back" means for each overlay.
+     *  Correctness-critical (plan A.1.3 table): scan must power the
+     *  camera down, confirm must not strand a pairing half-done, code
+     *  must NOT cancel the in-flight search (it self-times-out). */
+    private fun applyOverlayCloseSideEffects(top: InteractionPolicy.Overlay) {
+        when (top) {
+            InteractionPolicy.Overlay.SCAN -> stopScanner()
+            InteractionPolicy.Overlay.CONFIRM -> {
+                if (confirmVerifyIp != null) {
+                    // Pairing already registered — backing out only
+                    // stops watching it (B-05 watch), nothing to cancel.
+                    confirmVerifyIp = null
+                    confirmVerifyFailed = false
+                } else {
+                    confirmIp?.let { AudioEngine.cancelPairing(it) }
+                }
+                confirmShown = false
+                awaitingIp = null
+                pairSubmittedAtMs = 0L
+            }
+            InteractionPolicy.Overlay.CODE,
+            InteractionPolicy.Overlay.SETTINGS,
+            InteractionPolicy.Overlay.DISCOVER -> Unit // hide only
+        }
+    }
+
+    private fun stopScanner() {
+        qrScanner?.stop()
+        qrScanner = null
+    }
+
+    /** The one back handler behind all three channels (plan A.1.3). */
+    private fun handleBack() {
+        if (overlayStack.current != null) {
+            closeTopOverlay()
+            if (Build.VERSION.SDK_INT >= 30) {
+                findViewById<View>(android.R.id.content)
+                    .performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
+        } else {
+            // Level 2: background the task — never finish(). The engine
+            // stops only via 全部停止 / notification disconnect (see
+            // the onDestroy note).
+            moveTaskToBack(true)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        // API 26–32 channel. On API 33+ the dispatcher callbacks below
+        // take over while an overlay is open; at home the system
+        // default applies there and never reaches this override.
+        handleBack()
+    }
+
+    /** Keep the API 33+ back callbacks registered exactly while an
+     *  overlay is open (plan A.1.2): at home the system default —
+     *  including its own predictive animation — stays in charge. */
+    private fun syncBackCallbackRegistration() {
+        if (Build.VERSION.SDK_INT < 33) return
+        val want = overlayStack.current != null
+        if (want == (backInvokedCallback != null)) return
+        if (want) {
+            val cb = if (Build.VERSION.SDK_INT >= 34) newBackAnimationCallback()
+                     else newBackInvokedCallback()
+            backInvokedCallback = cb
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                cb as android.window.OnBackInvokedCallback)
+        } else {
+            onBackInvokedDispatcher.unregisterOnBackInvokedCallback(
+                backInvokedCallback as android.window.OnBackInvokedCallback)
+            backInvokedCallback = null
+        }
+    }
+
+    private fun newBackInvokedCallback(): android.window.OnBackInvokedCallback =
+        android.window.OnBackInvokedCallback { handleBack() }
+
+    /** Predictive back (API 34, plan A.1.2): the open overlay follows
+     *  the edge gesture (slides right ≤12% of its width, fades toward
+     *  0.85); a cancelled gesture springs it back in 180 ms. No custom
+     *  edge-arrow bubble is drawn — the system provides it (A.4). */
+    private fun newBackAnimationCallback(): android.window.OnBackAnimationCallback =
+        object : android.window.OnBackAnimationCallback {
+            override fun onBackStarted(event: android.window.BackEvent) {
+                backGestureView = overlayStack.current?.let { overlayView(it) }
+            }
+
+            override fun onBackProgressed(event: android.window.BackEvent) {
+                val v = backGestureView ?: return
+                if (event.progress < 0.02f) return // ignore touch-down noise
+                v.translationX = event.progress * v.width * 0.12f
+                v.alpha = 1f - 0.15f * event.progress
+            }
+
+            override fun onBackCancelled() {
+                val v = backGestureView ?: return
+                backGestureView = null
+                v.animate().translationX(0f).alpha(1f)
+                    .setDuration(180).setInterpolator(overlayInterpolator).start()
+            }
+
+            override fun onBackInvoked() {
+                backGestureView = null
+                handleBack()
+            }
+        }
+
+    // ---------------- wave 3: pull-to-refresh (plan A.1.4) ----------------
+
+    /** Observing touch listener on the home ScrollView — returns false
+     *  for every event so normal scrolling/clicks are never stolen; it
+     *  only watches for a downward pull that starts at scrollY == 0. */
+    private fun wirePullToRefresh() {
+        var downY = 0f
+        var pulling = false
+        var crossed = false
+        homeScroll.setOnTouchListener { _, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downY = ev.y
+                    pulling = false
+                    crossed = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!pulling && homeScroll.scrollY == 0 && ev.y - downY > dp(8) &&
+                        InteractionPolicy.pullRefreshAllowed(
+                            AudioEngine.running, anyConnectedNow,
+                            overlayStack.current != null, pullRefreshing)) {
+                        pulling = true
+                    }
+                    if (pulling) {
+                        val dy = ev.y - downY
+                        tvPullRefresh.visibility = View.VISIBLE
+                        tvPullRefresh.translationY =
+                            (dy * 0.5f).coerceAtMost(dp(72).toFloat())
+                        val over = dy >= dp(InteractionPolicy.PULL_THRESHOLD_DP)
+                        tvPullRefresh.text = getString(
+                            if (over) R.string.pull_refresh_release
+                            else R.string.pull_refresh_pull)
+                        if (over && !crossed) {
+                            crossed = true
+                            tvPullRefresh.performHapticFeedback(
+                                HapticFeedbackConstants.VIRTUAL_KEY)
+                        }
+                        if (!over) crossed = false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (pulling) {
+                        pulling = false
+                        if (ev.y - downY >= dp(InteractionPolicy.PULL_THRESHOLD_DP)) {
+                            startPullRefresh()
+                        } else {
+                            hidePullPill()
+                        }
+                    }
+                }
+            }
+            false
+        }
+    }
+
+    private fun startPullRefresh() {
+        pullRefreshing = true
+        pullRefreshStartMs = System.currentTimeMillis()
+        pullRefreshSettledSinceMs = 0L
+        tvPullRefresh.visibility = View.VISIBLE
+        tvPullRefresh.text = getString(R.string.pull_refresh_refreshing)
+        // Discovery restart ONLY — sessions/sockets are never touched
+        // (AudioEngine.refreshDiscovery contract, plan A.1.4).
+        AudioEngine.refreshDiscovery()
+        searchStartMs = pullRefreshStartMs // restart the empty-state timer
+    }
+
+    /** Completion, driven from refreshUi's signature check: the nearby
+     *  set changed and then settled for 600 ms, or 3 s elapsed —
+     *  whichever comes first (plan A.1.4). */
+    private fun pollPullRefresh(now: Long, cardsChanged: Boolean) {
+        if (!pullRefreshing) return
+        if (cardsChanged) {
+            pullRefreshSettledSinceMs = 0L
+        } else if (pullRefreshSettledSinceMs == 0L) {
+            pullRefreshSettledSinceMs = now
+        }
+        val settled = pullRefreshSettledSinceMs != 0L &&
+            now - pullRefreshSettledSinceMs > 600 &&
+            now - pullRefreshStartMs > 600
+        if (settled || now - pullRefreshStartMs > 3000) {
+            pullRefreshing = false
+            hidePullPill()
+            Toast.makeText(this, R.string.list_updated_toast, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun hidePullPill() {
+        tvPullRefresh.visibility = View.GONE
+        tvPullRefresh.translationY = 0f
     }
 
     // ---------------- online update (v2) ----------------
@@ -278,6 +619,8 @@ class MainActivity : Activity() {
     }
 
     private fun bindViews() {
+        homeScroll = findViewById(R.id.homeScroll)
+        tvPullRefresh = findViewById(R.id.tvPullRefresh)
         tvStatus = findViewById(R.id.tvStatus)
         viewStatusDot = findViewById(R.id.viewStatusDot)
         bannerReconnect = findViewById(R.id.bannerReconnect)
@@ -305,6 +648,7 @@ class MainActivity : Activity() {
         tvNoDevice = findViewById(R.id.tvNoDevice)
         tvElapsed = findViewById(R.id.tvElapsed)
         btnStart = findViewById(R.id.btnStart)
+        btnCameraRelay = findViewById(R.id.btnCameraRelay)
         overlaySettings = findViewById(R.id.overlaySettings)
         overlayDiscover = findViewById(R.id.overlayDiscover)
         discoverContainer = findViewById(R.id.discoverContainer)
@@ -329,10 +673,32 @@ class MainActivity : Activity() {
                 startBridge()
             } else if (AudioEngine.userPaused) {
                 AudioEngine.resumeAll()
+                // B-04: the foreground-service notification captured its
+                // "paused" state when it was built and never re-read it,
+                // so after a restore it kept offering 恢复 while already
+                // running. Rebuild it now (ACTION_REFRESH_FG re-posts
+                // without restarting the engine).
+                if (BridgeService.isRunning) {
+                    startService(Intent(this, BridgeService::class.java)
+                        .setAction(BridgeService.ACTION_REFRESH_FG))
+                }
             } else if (AudioEngine.connectedCount >= 2) {
                 stopService(Intent(this, BridgeService::class.java))
                 AudioEngine.stop()
             }
+        }
+        // Camera relay (wave 4 stage 1): a single toggle hook — the
+        // full camera UI is wave 3. Needs the CAMERA permission first
+        // (same permission the QR scanner uses, its own request code so
+        // the grant lands here, not in the scanner).
+        btnCameraRelay.setOnClickListener {
+            if (!AudioEngine.cameraRelayActive &&
+                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA_RELAY)
+            } else {
+                AudioEngine.toggleCameraRelay()
+            }
+            refreshUi()
         }
         // v2.1 pairing hierarchy: nearby discovery is THE entry; scan/code/IP are 其他方式
         findViewById<Button>(R.id.btnAddNearby).setOnClickListener { openDiscover() }
@@ -362,18 +728,23 @@ class MainActivity : Activity() {
         swMic.setOnCheckedChangeListener { _, checked -> AudioEngine.micEnabled = checked }
         swSpk.setOnCheckedChangeListener { _, checked -> AudioEngine.speakerEnabled = checked }
 
-        // playback runs on the voice-call stream (USAGE_VOICE_COMMUNICATION)
+        // Playback rides the MEDIA stream (USAGE_MEDIA): this slider is
+        // the same STREAM_MUSIC index the hardware keys and the system
+        // panel move — one master volume, several handles (§3.4). The
+        // observer + onResume refresh keep it following key changes.
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val seek = findViewById<SeekBar>(R.id.seekVolume)
-        seek.max = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        seek.progress = am.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+        seekPlaybackVolume = seek
+        seek.max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        seek.progress = am.getStreamVolume(AudioManager.STREAM_MUSIC)
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, progress, 0)
+                if (fromUser) am.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0)
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
+        contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver)
 
         val swEcho = findViewById<Switch>(R.id.swEcho)
         tintSwitch(swEcho, accent, accentDim)
@@ -499,6 +870,12 @@ class MainActivity : Activity() {
         } else if (requestCode == REQ_CAMERA) {
             tvScanHint.text = getString(R.string.scan_need_camera_perm_short)
             tvScanHint.setTextColor(error)
+        } else if (requestCode == REQ_CAMERA_RELAY) {
+            // camera-relay toggle was waiting on this permission
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                AudioEngine.toggleCameraRelay()
+            }
+            refreshUi()
         } else if (requestCode == REQ_BLE) {
             // nearby-devices permission decided: (re)start BLE scan either way
             AudioEngine.restartDiscovery()
@@ -506,10 +883,16 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        // Activity-bound mode (后台运行 off): the bridge dies with the UI.
-        if (isFinishing && !usingService && !AppSettings.bgServiceEnabled(this)) {
-            AudioEngine.stop()
-        }
+        contentResolver.unregisterContentObserver(volumeObserver)
+        stopScanner()
+        // Wave 3 (plan A.1.3 consequence, audit B-02): destroying the
+        // Activity no longer stops the engine — Back at home backgrounds
+        // the task instead of finishing, and a system-driven destroy
+        // must not silently kill the bridge either. The engine stops
+        // only on an explicit stop: 全部停止 (btnStart), the
+        // notification's disconnect action, or Settings' stop. In
+        // Activity-bound mode the engine object simply outlives the UI
+        // in the same process and the next launch reattaches to it.
         super.onDestroy()
     }
 
@@ -518,6 +901,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         AudioEngine.uiInForeground = true
+        refreshPlaybackVolumeSeek() // keys may have moved it while we were away
         polling = true
         handler.post(pollRunnable)
     }
@@ -541,6 +925,8 @@ class MainActivity : Activity() {
 
     private fun refreshUi() {
         val e = AudioEngine
+        btnCameraRelay.text = getString(
+            if (e.cameraRelayActive) R.string.action_camera_relay_stop else R.string.action_camera_relay_start)
         val now = System.currentTimeMillis()
         if (e.running && !wasRunning) searchStartMs = now
         wasRunning = e.running
@@ -610,7 +996,7 @@ class MainActivity : Activity() {
                 tvHeroSub.text = getString(R.string.hero_auto_hint)
             }
             else -> {
-                tvHeroEyebrow.text = "SOUNDRELAY"
+                tvHeroEyebrow.text = "LISTALK"
                 tvHeroEyebrow.setTextColor(text3)
                 tvHeroTitle.text = getString(R.string.hero_not_started)
                 tvHeroSub.text = getString(R.string.hero_not_started_sub)
@@ -733,14 +1119,26 @@ class MainActivity : Activity() {
             else -> btnStart.visibility = View.GONE
         }
 
-        // device cards (rebuild only on signature change)
+        // FB-12: a device that just disconnected loses any manual
+        // expansion, so it collapses back to a chip on its own (A.2.3).
+        val nowConnectedIds = views.filter { it.connected }.mapNotNull { it.deviceId }.toSet()
+        val pruned = InteractionPolicy.pruneManualExpanded(manualExpandedIds, prevConnectedIds, nowConnectedIds)
+        if (pruned != manualExpandedIds) manualExpandedIds = pruned.toMutableSet()
+        prevConnectedIds = nowConnectedIds
+        anyConnectedNow = nowConnectedIds.isNotEmpty()
+
+        // device cards (rebuild only on signature change; the FB-12
+        // form, pin and connecting state are part of the signature so
+        // density changes re-render in the same poll that causes them)
         val sig = views.joinToString("|") { v ->
-            "${v.deviceId}/${v.ip}/${v.paired}/${v.online}/${v.connected}/${(v.rttMs / 5).toInt()}/${v.autoConnect}/${v.micSend}/${v.speakerRecv}/${(v.speakerVolume * 20).toInt()}/${v.muted}/${v.autoPaused}/${v.justAutoConnected}/${v.name}"
+            "${v.deviceId}/${v.ip}/${v.paired}/${v.online}/${v.connected}/${(v.rttMs / 5).toInt()}/${v.autoConnect}/${v.micSend}/${v.speakerRecv}/${(v.speakerVolume * 20).toInt()}/${v.muted}/${v.autoPaused}/${v.justAutoConnected}/${v.name}/${formOf(v)}/${v.pinned}/${v.connecting}"
         } + "#flash$flashDeviceId"
-        if (sig != lastCardSignature) {
+        val cardsChanged = sig != lastCardSignature
+        if (cardsChanged && now >= listAnimUntilMs) {
             lastCardSignature = sig
             rebuildDeviceCards(views, now)
         }
+        pollPullRefresh(now, cardsChanged)
         if (e.running && views.isEmpty() && now - searchStartMs > 5000) {
             tvNoDevice.visibility = View.VISIBLE
             tvNoDevice.text = getString(R.string.no_device_text)
@@ -786,17 +1184,199 @@ class MainActivity : Activity() {
         return tv
     }
 
+    /** FB-12 density form for one paired device (plan A.2.2): the pure
+     *  rule lives in InteractionPolicy; this only gathers the inputs. */
+    private fun formOf(v: AudioEngine.DeviceView): InteractionPolicy.DeviceForm =
+        InteractionPolicy.formFor(InteractionPolicy.FormInput(
+            connected = v.connected,
+            connecting = v.connecting,
+            pairingTarget = isPairingTarget(v),
+            manualExpanded = v.deviceId != null && manualExpandedIds.contains(v.deviceId)))
+
+    private fun isPairingTarget(v: AudioEngine.DeviceView): Boolean =
+        (awaitingIp != null && awaitingIp == v.ip) ||
+            (confirmShown && confirmIp != null && confirmIp == v.ip)
+
     private fun rebuildDeviceCards(views: List<AudioEngine.DeviceView>, now: Long) {
         deviceContainer.removeAllViews()
         val paired = views.filter { it.paired }
         val fresh = views.filter { !it.paired }
-        if (paired.isNotEmpty()) {
+        val expanded = paired.filter { formOf(it) == InteractionPolicy.DeviceForm.CARD }
+        val compact = paired.filter { formOf(it) == InteractionPolicy.DeviceForm.CHIP }
+            .sortedWith { a, b ->
+                InteractionPolicy.COMPACT_ORDER.compare(
+                    InteractionPolicy.CompactKey(a.pinned, a.online, a.lastSeenMs),
+                    InteractionPolicy.CompactKey(b.pinned, b.online, b.lastSeenMs))
+            }
+        if (expanded.isNotEmpty()) {
             deviceContainer.addView(sectionTitle(getString(R.string.section_my_pcs)))
-            for (v in paired) deviceContainer.addView(buildPairedCard(v, now))
+            for (v in expanded) deviceContainer.addView(buildPairedCard(v, now))
+        }
+        if (compact.isNotEmpty()) {
+            deviceContainer.addView(sectionTitle(getString(R.string.section_my_pcs_disconnected, compact.size)))
+            for (v in compact) deviceContainer.addView(buildPairedChip(v, now))
         }
         if (fresh.isNotEmpty()) {
             deviceContainer.addView(sectionTitle(getString(R.string.section_new_devices)))
             for (v in fresh) deviceContainer.addView(buildUnpairedRow(v))
+        }
+        // Form transitions (plan A.2.3): a device whose form changed
+        // since the last rebuild fades into its new shape over 220 ms;
+        // a manual tap additionally animates the height (below).
+        val currentIds = paired.mapNotNull { it.deviceId }.toSet()
+        lastForms.keys.retainAll(currentIds)
+        var anyFormChanged = false
+        for (v in paired) {
+            val id = v.deviceId ?: continue
+            val form = formOf(v)
+            val prev = lastForms.put(id, form)
+            if (prev != null && prev != form && pendingFormAnim?.first != id) {
+                findTaggedDeviceView(id)?.let { view ->
+                    view.alpha = 0f
+                    view.animate().alpha(1f).setDuration(220)
+                        .setInterpolator(overlayInterpolator).start()
+                }
+                anyFormChanged = true
+            }
+        }
+        if (anyFormChanged) listAnimUntilMs = maxOf(listAnimUntilMs, now + 220)
+        pendingFormAnim?.let { (id, fromHeight) ->
+            pendingFormAnim = null
+            animateFormChange(id, fromHeight, now)
+        }
+    }
+
+    private fun findTaggedDeviceView(deviceId: String): View? {
+        for (i in 0 until deviceContainer.childCount) {
+            val child = deviceContainer.getChildAt(i)
+            if (child.tag == deviceId) return child
+        }
+        return null
+    }
+
+    /** Height animation for a manual expand/collapse (220 ms, plan
+     *  A.2.3): the list rebuild is signature-frozen while it runs so
+     *  the animating view is not swapped out mid-flight. */
+    private fun animateFormChange(deviceId: String, fromHeight: Int, now: Long) {
+        val target = findTaggedDeviceView(deviceId) ?: return
+        listAnimUntilMs = maxOf(listAnimUntilMs, now + 220)
+        target.post {
+            val targetHeight = target.height
+            if (targetHeight <= 0 || fromHeight <= 0) return@post
+            val lp = target.layoutParams
+            lp.height = fromHeight
+            target.layoutParams = lp
+            val anim = ValueAnimator.ofInt(fromHeight, targetHeight)
+            anim.duration = 220
+            anim.interpolator = overlayInterpolator
+            anim.addUpdateListener { a ->
+                lp.height = a.animatedValue as Int
+                target.layoutParams = lp
+            }
+            anim.addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    target.layoutParams = lp
+                }
+            })
+            anim.start()
+        }
+    }
+
+    /** FB-12 compact row (plan A.2.2, prototype v3): one 54dp line —
+     *  icon tile, name, status dot + text, expand chevron. The whole
+     *  row is the tap target: tap expands (or retries a guard-paused
+     *  auto-connect), long-press opens the same device menu as cards. */
+    private fun buildPairedChip(v: AudioEngine.DeviceView, now: Long): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.tag = v.deviceId
+        val flash = flashDeviceId != null && v.deviceId == flashDeviceId && now < flashUntilMs
+        row.setBackgroundResource(if (flash) R.drawable.bg_card_highlight else R.drawable.bg_card)
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54))
+        lp.topMargin = dp(8)
+        row.layoutParams = lp
+        row.setPadding(dp(10), 0, dp(10), 0)
+        if (!v.online) row.alpha = 0.75f
+
+        val icon = TextView(this)
+        icon.text = "🖥"
+        icon.setBackgroundResource(R.drawable.bg_chip)
+        icon.setPadding(dp(7), dp(5), dp(7), dp(5))
+        row.addView(icon)
+
+        val nameTv = TextView(this)
+        nameTv.text = v.name
+        nameTv.setTextColor(text1); nameTv.textSize = 14f
+        nameTv.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        nameTv.maxLines = 1
+        nameTv.ellipsize = android.text.TextUtils.TruncateAt.END
+        val nlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT)
+        nlp.weight = 1f; nlp.marginStart = dp(10)
+        nameTv.layoutParams = nlp
+        row.addView(nameTv)
+
+        val dot = View(this)
+        dot.layoutParams = LinearLayout.LayoutParams(dp(7), dp(7))
+        dot.setBackgroundResource(R.drawable.bg_dot)
+        dot.backgroundTintList = ColorStateList.valueOf(when {
+            v.autoPaused -> error
+            v.online -> accent
+            else -> text3
+        })
+        row.addView(dot)
+
+        val status = TextView(this)
+        status.text = when {
+            v.autoPaused -> getString(R.string.badge_auto_failed)
+            v.online -> getString(R.string.chip_online)
+            else -> getString(R.string.chip_offline) + " · " +
+                getString(R.string.last_connected_format, formatLastSeen(v.lastSeenMs))
+        }
+        status.setTextColor(if (v.autoPaused) error else text2)
+        status.textSize = 12f
+        status.maxLines = 1
+        val slp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        slp.marginStart = dp(6)
+        status.layoutParams = slp
+        row.addView(status)
+
+        val chevron = TextView(this)
+        chevron.text = "▾"
+        chevron.setTextColor(text3); chevron.textSize = 14f
+        val chlp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        chlp.marginStart = dp(6)
+        chevron.layoutParams = chlp
+        row.addView(chevron)
+
+        row.setOnClickListener {
+            if (v.autoPaused) {
+                // Guard-paused: a tap retries directly, never expands.
+                AudioEngine.retryAutoConnect(v.ip)
+                lastCardSignature = ""
+                return@setOnClickListener
+            }
+            val id = v.deviceId ?: return@setOnClickListener
+            pendingFormAnim = id to row.height
+            manualExpandedIds = mutableSetOf(id) // exclusive (A.2.3)
+            lastCardSignature = ""
+        }
+        wireDeviceLongPress(row, v)
+        return row
+    }
+
+    /** Long-press on a card or a chip: LONG_PRESS haptic + a brief
+     *  press-scale, then the shared device menu (plan A.1.6). Uses the
+     *  system long-press duration — no custom timer (A.4). */
+    private fun wireDeviceLongPress(view: View, v: AudioEngine.DeviceView) {
+        view.setOnLongClickListener { anchor ->
+            anchor.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            anchor.animate().scaleX(0.98f).scaleY(0.98f).setDuration(120)
+                .withEndAction { anchor.animate().scaleX(1f).scaleY(1f).setDuration(120).start() }
+                .start()
+            showDeviceMenu(anchor, v)
+            true
         }
     }
 
@@ -813,6 +1393,7 @@ class MainActivity : Activity() {
     private fun buildPairedCard(v: AudioEngine.DeviceView, now: Long): View {
         val card = LinearLayout(this)
         card.orientation = LinearLayout.VERTICAL
+        card.tag = v.deviceId
         val flash = flashDeviceId != null && v.deviceId == flashDeviceId && now < flashUntilMs
         card.setBackgroundResource(when {
             flash -> R.drawable.bg_card_highlight
@@ -861,6 +1442,22 @@ class MainActivity : Activity() {
         sub.setTextColor(text2); sub.textSize = 12f; sub.typeface = android.graphics.Typeface.MONOSPACE
         header.addView(sub)
         card.addView(header)
+        // FB-12: tapping the header of a manually expanded card folds
+        // it back to a chip. A connected card never collapses by hand
+        // (plan A.2.2) — the tap explains instead; state-driven cards
+        // (connecting / pairing) ignore the tap entirely.
+        header.setOnClickListener {
+            val id = v.deviceId ?: return@setOnClickListener
+            when {
+                v.connected -> Toast.makeText(this,
+                    R.string.connected_cannot_collapse_toast, Toast.LENGTH_SHORT).show()
+                manualExpandedIds.contains(id) -> {
+                    pendingFormAnim = id to card.height
+                    manualExpandedIds.remove(id)
+                    lastCardSignature = ""
+                }
+            }
+        }
 
         // auto-connect row — NEVER dimmed/disabled, even offline (§3.3 hard rule)
         val autoRow = LinearLayout(this); autoRow.orientation = LinearLayout.HORIZONTAL; autoRow.gravity = Gravity.CENTER_VERTICAL
@@ -925,7 +1522,7 @@ class MainActivity : Activity() {
         volRow.addView(volLabel)
         val seek = SeekBar(this)
         seek.max = 100
-        seek.progress = (v.speakerVolume * 100).toInt()
+        seek.progress = Protocol.percentForGain(v.speakerVolume)
         seek.isEnabled = v.online && v.speakerRecv
         seek.progressTintList = ColorStateList.valueOf(if (v.muted) text3 else sky)
         seek.thumbTintList = ColorStateList.valueOf(if (v.muted) text3 else sky)
@@ -933,14 +1530,14 @@ class MainActivity : Activity() {
         seek.layoutParams = slp
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) v.deviceId?.let { AudioEngine.setSpeakerVolume(it, progress / 100f) }
+                if (fromUser) v.deviceId?.let { AudioEngine.setSpeakerVolume(it, Protocol.gainForPercent(progress)) }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) { lastCardSignature = "" }
         })
         volRow.addView(seek)
         val volText = TextView(this)
-        volText.text = if (v.muted) getString(R.string.muted_label) else "${(v.speakerVolume * 100).toInt()}%"
+        volText.text = if (v.muted) getString(R.string.muted_label) else "${Protocol.percentForGain(v.speakerVolume)}%"
         volText.setTextColor(if (v.muted) error else text2); volText.textSize = 12f; volText.typeface = android.graphics.Typeface.MONOSPACE
         volRow.addView(volText)
         val muteBtn = TextView(this)
@@ -953,6 +1550,10 @@ class MainActivity : Activity() {
         }
         volRow.addView(muteBtn)
         channels.addView(volRow)
+        // Master vs trim (§3.4): this slider is a per-PC relative trim;
+        // overall loudness is the system media volume (hardware keys).
+        val volNote = TextView(this); volNote.text = getString(R.string.card_volume_note); volNote.setTextColor(text3); volNote.textSize = 11f
+        channels.addView(volNote)
         card.addView(channels)
 
         // footer action (§2.3)
@@ -988,10 +1589,7 @@ class MainActivity : Activity() {
         if (v.autoPaused) {
             card.setOnClickListener { AudioEngine.retryAutoConnect(v.ip); lastCardSignature = "" }
         }
-        card.setOnLongClickListener { anchor ->
-            showDeviceMenu(anchor, v)
-            true
-        }
+        wireDeviceLongPress(card, v)
         return card
     }
 
@@ -1031,6 +1629,7 @@ class MainActivity : Activity() {
         menu.menu.add(0, 1, 0, getString(R.string.menu_rename))
         menu.menu.add(0, 2, 0, getString(R.string.menu_pairing_info))
         menu.menu.add(0, 3, 0, getString(R.string.menu_forget))
+        menu.menu.add(0, 4, 0, getString(if (v.pinned) R.string.menu_unpin else R.string.menu_pin))
         menu.setOnMenuItemClickListener { item ->
             val id = v.deviceId ?: return@setOnMenuItemClickListener false
             when (item.itemId) {
@@ -1059,10 +1658,16 @@ class MainActivity : Activity() {
                         .setPositiveButton(getString(R.string.action_forget)) { _, _ ->
                             AudioEngine.disconnectDevice(v.ip)
                             AudioEngine.forgetDevice(id)
+                            manualExpandedIds.remove(id)
                             lastCardSignature = ""
                         }
                         .setNegativeButton(getString(R.string.action_cancel), null)
                         .show()
+                }
+                4 -> {
+                    // Pin/unpin only reorders the compact group (A.2.5).
+                    AudioEngine.setPinned(id, !v.pinned)
+                    lastCardSignature = ""
                 }
             }
             true
@@ -1111,9 +1716,7 @@ class MainActivity : Activity() {
 
     private fun openScan(target: AudioEngine.DeviceView?) {
         pairTarget = target
-        overlayCode.visibility = View.GONE
-        overlayConfirm.visibility = View.GONE
-        overlayScan.visibility = View.VISIBLE
+        showOverlay(InteractionPolicy.Overlay.SCAN)
         tvScanHint.text = getString(R.string.scan_hint_aim)
         tvScanHint.setTextColor(text1)
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -1141,9 +1744,13 @@ class MainActivity : Activity() {
     }
 
     private fun closeScan() {
-        qrScanner?.stop()
-        qrScanner = null
+        stopScanner()
+        if (overlayStack.current == InteractionPolicy.Overlay.SCAN) overlayStack.clear()
+        overlayScan.animate().cancel()
         overlayScan.visibility = View.GONE
+        overlayScan.alpha = 1f
+        overlayScan.translationX = 0f
+        syncBackCallbackRegistration()
     }
 
     private fun onQrResult(text: String) {
@@ -1174,8 +1781,7 @@ class MainActivity : Activity() {
     private fun openCode(target: AudioEngine.DeviceView?) {
         pairTarget = target
         closeScan()
-        overlayConfirm.visibility = View.GONE
-        overlayCode.visibility = View.VISIBLE
+        showOverlay(InteractionPolicy.Overlay.CODE)
         tvCodeError.visibility = View.GONE
         etPairCode.text = null
         btnCodeSubmit.isEnabled = false
@@ -1202,6 +1808,37 @@ class MainActivity : Activity() {
     }
 
     private fun pollPairingProgress(now: Long) {
+        // B-05 verification watch: after 确认配对 the overlay stays up
+        // in a verifying state until the session proves itself for
+        // VERIFY_OK_MS; a drop inside the window surfaces the error bar
+        // (it used to stay GONE forever — audit R-A6) and offers a retry
+        // instead of the old silent optimistic close.
+        val verifyIp = confirmVerifyIp
+        if (verifyIp != null && !confirmVerifyFailed) {
+            val sess = AudioEngine.sessions[verifyIp]
+            when (InteractionPolicy.verifyOutcome(
+                sessionExists = sess != null,
+                connected = sess?.connected == true,
+                reResolving = sess?.reResolving == true,
+                elapsedMs = now - confirmVerifyStartMs)) {
+                InteractionPolicy.VerifyOutcome.OK -> {
+                    confirmVerifyIp = null
+                    finishConfirmSuccess()
+                }
+                InteractionPolicy.VerifyOutcome.FAILED -> {
+                    confirmVerifyFailed = true
+                    findViewById<TextView>(R.id.tvConfirmError).visibility = View.VISIBLE
+                    val btnPair = findViewById<Button>(R.id.btnConfirmPair)
+                    btnPair.isEnabled = true
+                    btnPair.text = getString(R.string.action_retry)
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        overlayConfirm.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                    }
+                }
+                InteractionPolicy.VerifyOutcome.PENDING -> Unit
+            }
+            return
+        }
         // a pending pair appeared -> verification confirm (§4.3)
         val pending = AudioEngine.pendingPairSession()
         if (pending != null && !confirmShown) {
@@ -1215,9 +1852,7 @@ class MainActivity : Activity() {
             val did = sess?.deviceId
             if (sess != null && sess.connected && did != null && AudioEngine.registry.containsKey(did)) {
                 awaitingIp = null
-                overlayCode.visibility = View.GONE
-                overlayScan.visibility = View.GONE
-                overlayDiscover.visibility = View.GONE
+                hideAllOverlays()
                 tvBannerAutoText.text = getString(R.string.already_paired_banner)
                 bannerIps = emptyList()
                 bannerAuto.visibility = View.VISIBLE
@@ -1229,7 +1864,7 @@ class MainActivity : Activity() {
             awaitingIp = null
             AudioEngine.cancelCodePairing()
             pairSubmittedAtMs = 0L
-            if (overlayCode.visibility == View.VISIBLE) {
+            if (overlayStack.current == InteractionPolicy.Overlay.CODE) {
                 tvCodeError.visibility = View.VISIBLE
                 tvCodeError.setTextColor(error)
                 tvCodeError.text = getString(R.string.code_invalid_error)
@@ -1237,18 +1872,42 @@ class MainActivity : Activity() {
                 Toast.makeText(this, getString(R.string.pair_timeout_toast), Toast.LENGTH_LONG).show()
             }
         }
-        if (AudioEngine.codeSearch == null && pairSubmittedAtMs > 0 && awaitingIp == null && pending == null && !confirmShown && overlayCode.visibility == View.VISIBLE && now - pairSubmittedAtMs > 18000) {
+        if (AudioEngine.codeSearch == null && pairSubmittedAtMs > 0 && awaitingIp == null && pending == null && !confirmShown && overlayStack.current == InteractionPolicy.Overlay.CODE && now - pairSubmittedAtMs > 18000) {
             pairSubmittedAtMs = 0L
+        }
+    }
+
+    /** The pairing counts as done (verify watch OK): close the overlay
+     *  and run the success banner + card flash, with the name/auto text
+     *  captured at tap time. */
+    private fun finishConfirmSuccess() {
+        val did = confirmIp?.let { AudioEngine.sessions[it]?.deviceId }
+        confirmShown = false
+        hideAllOverlays()
+        if (did != null) { flashDeviceId = did; flashUntilMs = System.currentTimeMillis() + 1000 }
+        tvBannerAutoText.text = getString(R.string.paired_banner, confirmVerifyName,
+            getString(if (confirmVerifyAuto) R.string.auto_on_word else R.string.auto_off_word))
+        bannerIps = emptyList()
+        bannerAuto.visibility = View.VISIBLE
+        bannerShownAtMs = System.currentTimeMillis()
+        lastCardSignature = ""
+        if (Build.VERSION.SDK_INT >= 30) {
+            findViewById<View>(android.R.id.content)
+                .performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
 
     private fun showConfirm(s: AudioEngine.Session) {
         confirmShown = true
         confirmIp = s.ip
-        overlayScan.visibility = View.GONE
-        overlayCode.visibility = View.GONE
-        overlayDiscover.visibility = View.GONE
-        overlayConfirm.visibility = View.VISIBLE
+        // Fresh confirm: reset the B-05 verify state and the button, and
+        // clear any error a previous failed attempt left behind.
+        confirmVerifyIp = null
+        confirmVerifyFailed = false
+        val btnPair = findViewById<Button>(R.id.btnConfirmPair)
+        btnPair.isEnabled = true
+        btnPair.text = getString(R.string.action_confirm_pair)
+        showOverlay(InteractionPolicy.Overlay.CONFIRM)
         findViewById<TextView>(R.id.tvConfirmName).text = "🖥  ${s.name}"
         findViewById<TextView>(R.id.tvConfirmSub).text = "${s.os.ifEmpty { getString(R.string.pc_default_name) }} · ${s.ip}"
         val code = s.pendingVerifyCode ?: "------"
@@ -1258,14 +1917,14 @@ class MainActivity : Activity() {
     }
 
     private fun wirePairingOverlays() {
-        findViewById<TextView>(R.id.btnScanBack).setOnClickListener { closeScan() }
+        findViewById<TextView>(R.id.btnScanBack).setOnClickListener { closeTopOverlay() }
         findViewById<TextView>(R.id.btnScanToCode).setOnClickListener { openCode(pairTarget) }
         findViewById<TextView>(R.id.btnTorch).setOnClickListener { v ->
             val on = !(qrScanner?.torchOn ?: false)
             qrScanner?.setTorch(on)
             (v as TextView).setTextColor(if (on) accent else text2)
         }
-        findViewById<TextView>(R.id.btnCodeBack).setOnClickListener { overlayCode.visibility = View.GONE }
+        findViewById<TextView>(R.id.btnCodeBack).setOnClickListener { closeTopOverlay() }
         findViewById<TextView>(R.id.btnCodeToScan).setOnClickListener { openScan(pairTarget) }
         etPairCode.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -1278,37 +1937,60 @@ class MainActivity : Activity() {
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         })
         btnCodeSubmit.setOnClickListener { submitCode() }
-        findViewById<Button>(R.id.btnConfirmPair).setOnClickListener {
+        findViewById<Button>(R.id.btnConfirmPair).setOnClickListener { clicked ->
+            val btn = clicked as Button
             val ip = confirmIp ?: return@setOnClickListener
+            val errorBar = findViewById<TextView>(R.id.tvConfirmError)
+            if (confirmVerifyIp == ip && confirmVerifyFailed) {
+                // Retry after a failed verification: the registration
+                // already landed — re-drive the connection and watch
+                // the session prove itself again.
+                AudioEngine.connectDevice(ip)
+                confirmVerifyFailed = false
+                confirmVerifyStartMs = System.currentTimeMillis()
+                errorBar.visibility = View.GONE
+                btn.isEnabled = false
+                btn.text = getString(R.string.confirm_verifying)
+                return@setOnClickListener
+            }
+            if (confirmVerifyIp != null) return@setOnClickListener // already verifying
             val auto = findViewById<Switch>(R.id.swAutoConfirm).isChecked
             val sess = AudioEngine.sessions[ip]
-            val name = sess?.name ?: getString(R.string.pc_default_name)
-            val did = sess?.deviceId
-            AudioEngine.confirmPairing(ip, auto)
-            overlayConfirm.visibility = View.GONE
-            confirmShown = false
+            confirmVerifyName = sess?.name ?: getString(R.string.pc_default_name)
+            confirmVerifyAuto = auto
+            if (!AudioEngine.confirmPairing(ip, auto)) {
+                // B-05: nothing was registered (session/token gone) —
+                // surface it on the error bar instead of the old fake
+                // success close.
+                errorBar.visibility = View.VISIBLE
+                if (Build.VERSION.SDK_INT >= 30) {
+                    overlayConfirm.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                }
+                return@setOnClickListener
+            }
             awaitingIp = null
             pairSubmittedAtMs = 0L
-            if (did != null) { flashDeviceId = did; flashUntilMs = System.currentTimeMillis() + 1000 }
-            tvBannerAutoText.text = getString(R.string.paired_banner, name, getString(if (auto) R.string.auto_on_word else R.string.auto_off_word))
-            bannerIps = emptyList()
-            bannerAuto.visibility = View.VISIBLE
-            bannerShownAtMs = System.currentTimeMillis()
-            lastCardSignature = ""
+            // Enter the verifying state — pollPairingProgress's watch
+            // closes via finishConfirmSuccess once the session has
+            // stayed up for VERIFY_OK_MS, or flips to the failed state.
+            confirmVerifyIp = ip
+            confirmVerifyStartMs = System.currentTimeMillis()
+            confirmVerifyFailed = false
+            errorBar.visibility = View.GONE
+            btn.isEnabled = false
+            btn.text = getString(R.string.confirm_verifying)
         }
         findViewById<TextView>(R.id.btnConfirmCancel).setOnClickListener {
-            confirmIp?.let { AudioEngine.cancelPairing(it) }
-            overlayConfirm.visibility = View.GONE
-            confirmShown = false
-            awaitingIp = null
-            pairSubmittedAtMs = 0L
+            // Same path as Back on this overlay (plan A.1.3): cancels
+            // the pairing unless registration already landed.
+            closeTopOverlay()
         }
     }
 
     // ---------------- settings (v2.1) ----------------
 
     private fun openSettings() {
-        overlaySettings.visibility = View.VISIBLE
+        showOverlay(InteractionPolicy.Overlay.SETTINGS)
         refreshSettingsStates()
     }
 
@@ -1380,7 +2062,7 @@ class MainActivity : Activity() {
     }
 
     private fun wireSettingsUi() {
-        findViewById<TextView>(R.id.btnSettingsBack).setOnClickListener { overlaySettings.visibility = View.GONE }
+        findViewById<TextView>(R.id.btnSettingsBack).setOnClickListener { closeTopOverlay() }
         val p = AppSettings.prefs(this)
         // reconnect mode radios
         val rg = findViewById<android.widget.RadioGroup>(R.id.rgReconnect)
@@ -1505,11 +2187,8 @@ class MainActivity : Activity() {
     // ---------------- nearby discovery sheet (v2.1, PRIMARY pairing entry) ----------------
 
     private fun openDiscover() {
-        overlaySettings.visibility = View.GONE
-        overlayCode.visibility = View.GONE
-        overlayConfirm.visibility = View.GONE
         closeScan()
-        overlayDiscover.visibility = View.VISIBLE
+        showOverlay(InteractionPolicy.Overlay.DISCOVER)
         lastDiscoverSignature = ""
         if (!ensureServiceRunning()) { /* sheet still lists what the engine hears once it starts */ }
         ensureBlePermission()
@@ -1528,16 +2207,17 @@ class MainActivity : Activity() {
     }
 
     private fun wireDiscoverUi() {
-        findViewById<TextView>(R.id.btnDiscoverBack).setOnClickListener { overlayDiscover.visibility = View.GONE }
-        findViewById<TextView>(R.id.btnDiscoverScan).setOnClickListener { overlayDiscover.visibility = View.GONE; openScan(null) }
-        findViewById<TextView>(R.id.btnDiscoverCode).setOnClickListener { overlayDiscover.visibility = View.GONE; openCode(null) }
-        findViewById<TextView>(R.id.btnDiscoverManual).setOnClickListener { overlayDiscover.visibility = View.GONE; showManualIpDialog() }
+        findViewById<TextView>(R.id.btnDiscoverBack).setOnClickListener { closeTopOverlay() }
+        findViewById<TextView>(R.id.btnDiscoverScan).setOnClickListener { openScan(null) }
+        findViewById<TextView>(R.id.btnDiscoverCode).setOnClickListener { openCode(null) }
+        findViewById<TextView>(R.id.btnDiscoverManual).setOnClickListener { closeTopOverlay(); showManualIpDialog() }
     }
 
     private fun refreshDiscoverSheet(views: List<AudioEngine.DeviceView>) {
         val e = AudioEngine
         val nearby = e.nearbyDevices()
-        tvDiscoverStatus.text = getString(R.string.discover_status_format, e.mdnsStatusText, e.bleStatusText)
+        tvDiscoverStatus.text = getString(R.string.discover_status_format, e.mdnsStatusText, e.bleStatusText) +
+            "\n" + e.discoveryDiagText()
         tvDiscoverEmpty.visibility = if (nearby.isEmpty()) View.VISIBLE else View.GONE
         val sig = nearby.joinToString("|") { n ->
             "${n.key}/${n.deviceId}/${n.ip}/${n.rssi}/${n.sources}/${views.firstOrNull { v -> v.deviceId == n.deviceId || v.ip == n.ip }?.connected}"
@@ -1591,7 +2271,7 @@ class MainActivity : Activity() {
             paired -> {
                 btn.text = getString(R.string.action_connect)
                 btn.setTextColor(accent); btn.setBackgroundResource(R.drawable.btn_secondary)
-                btn.setOnClickListener { AudioEngine.connectDevice(n.ip!!); overlayDiscover.visibility = View.GONE }
+                btn.setOnClickListener { AudioEngine.connectDevice(n.ip!!); closeTopOverlay() }
             }
             else -> {
                 btn.text = getString(R.string.action_pair)
@@ -1601,7 +2281,7 @@ class MainActivity : Activity() {
                     AudioEngine.pairAndConnect(n.ip!!, null)
                     awaitingIp = n.ip
                     pairSubmittedAtMs = System.currentTimeMillis()
-                    overlayDiscover.visibility = View.GONE
+                    closeTopOverlay()
                 }
             }
         }
@@ -1614,5 +2294,6 @@ class MainActivity : Activity() {
         private const val REQ_AUDIO = 42
         private const val REQ_CAMERA = 43
         private const val REQ_BLE = 44
+        private const val REQ_CAMERA_RELAY = 45
     }
 }

@@ -10,9 +10,11 @@ namespace AirBridge;
 /// Gray's home LAN is several ROUTED subnets (192.168.23.0/24 with cascaded
 /// 192.168.88.0/24, 192.168.99.0/24): broadcast and mDNS never cross a router,
 /// so a third discovery channel unicasts the existing probe packets
-/// (PC → BEACON, phone → DISCOVER) to every host of a bounded candidate set:
-/// (a) local interface /24s, (b) paired devices' last-known-IP /24s (learned,
-/// persisted), (c) user-configured extra subnets. Bounds: at most MaxSubnets
+/// (PC → BEACON, phone → DISCOVER) to every host of a bounded candidate set,
+/// ordered by value (hardening F9): paired devices' last-known-IP /24s
+/// first (learned, persisted — never evictable), then local physical
+/// interface /24s, then local virtual interface /24s, then user-configured
+/// extra subnets. Bounds: at most MaxSubnets
 /// subnets, hosts .1–.254 only, own IPs skipped, priority hosts and the
 /// gateway-ish .1/.254 first, per-tick batch budget at the call site, and a
 /// host that answers is not re-probed until the next cycle.
@@ -63,18 +65,40 @@ public static class SubnetSweep
         raw.Split(new[] { ',', ';', '\n', '\r', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
            .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
 
-    /// <summary>Ordered, deduped candidate /24 networks, capped at MaxSubnets:
-    /// local-interface subnets first, then paired devices' subnets, then the
-    /// user's extra subnets.</summary>
-    public static List<int> CandidateSubnets(List<int> localIps, List<int> pairedIps, List<string> extraSpecs)
+    /// <summary>Ordered, deduped candidate /24 networks, capped at MaxSubnets,
+    /// ordered by VALUE (discovery hardening, F9 — mirror of SubnetSweep.kt):
+    /// paired devices' subnets FIRST (added before anything else, so a pile
+    /// of local virtual/VPN adapters can never evict the subnet a paired
+    /// phone actually lives on), then local PHYSICAL (Ethernet/WiFi)
+    /// subnets, then local VIRTUAL subnets, then the user's extra subnets.
+    /// Callers classify their interface addresses into the two local lists.</summary>
+    public static List<int> CandidateSubnets(List<int> localPhysicalIps, List<int> localVirtualIps, List<int> pairedIps, List<string> extraSpecs)
     {
         var outp = new List<int>();
         void Add(int n) { if (!outp.Contains(n) && outp.Count < MaxSubnets) outp.Add(n); }
-        foreach (var ip in localIps) Add(Subnet24(ip));
         foreach (var ip in pairedIps) Add(Subnet24(ip));
+        foreach (var ip in localPhysicalIps) Add(Subnet24(ip));
+        foreach (var ip in localVirtualIps) Add(Subnet24(ip));
         foreach (var spec in extraSpecs)
             if (TryParseSubnetSpec(spec, out int n)) Add(n);
         return outp;
+    }
+
+    /// <summary>Interface classification for the candidate ordering: is this
+    /// adapter a virtual/VPN one (Hyper-V, WSL, VMware, VirtualBox, TAP/TUN,
+    /// generic tunnels)? String/type-based heuristic — a false "virtual"
+    /// only costs probe priority, never correctness, because paired
+    /// subnets always rank first regardless.</summary>
+    public static bool IsVirtualInterface(string name, string description, System.Net.NetworkInformation.NetworkInterfaceType type)
+    {
+        if (type is System.Net.NetworkInformation.NetworkInterfaceType.Tunnel
+            or System.Net.NetworkInformation.NetworkInterfaceType.Ppp
+            or System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+            return true;
+        string s = (name + " " + description).ToLowerInvariant();
+        foreach (var hint in new[] { "hyper-v", "virtual", "vmware", "vbox", "wsl", "tap", "tun", "vpn", "docker", "loopback", "bluetooth" })
+            if (s.Contains(hint)) return true;
+        return false;
     }
 
     /// <summary>Probe order inside one /24: priority hosts in this subnet

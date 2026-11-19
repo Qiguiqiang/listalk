@@ -1,4 +1,4 @@
-; 声音接力 SoundRelay v2.2 — Windows installer (NSIS 3, per-user, no admin)
+; 听说 LisTalk v2.3 — Windows installer (NSIS 3, per-user, no admin)
 ; Native .NET 8 / Avalonia app — NO Python runtime involved.
 ; Build: makensis installer-v2.2.nsi  (app source: windows-native\stage-v22\ = AirBridge.exe + airbridge.ico;
 ;        driver source: windows-native\stage-v22-driver\ — an ASCII-only staging
@@ -16,8 +16,8 @@ SetCompressor /SOLID lzma
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
 
-!define PRODUCT_NAME "声音接力 SoundRelay"
-!define PRODUCT_VERSION "2.2.4"
+!define PRODUCT_NAME "听说 LisTalk"
+!define PRODUCT_VERSION "2.3.0"
 !define PRODUCT_PUBLISHER "Gray"
 !ifndef SRC_DIR
     !define SRC_DIR "windows-native\stage-v22"
@@ -52,17 +52,17 @@ SetCompressor /SOLID lzma
 !insertmacro RequireDriverFile "${DRV_STAGE}\uninstall-driver.ps1"
 
 Name "${PRODUCT_NAME}"
-OutFile "SoundRelay-Setup-v${PRODUCT_VERSION}.exe"
+OutFile "LisTalk-Setup-v${PRODUCT_VERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\AirBridge"
 InstallDirRegKey HKCU "Software\AirBridge" "InstallDir"
 RequestExecutionLevel user
-BrandingText "声音接力 SoundRelay ${PRODUCT_VERSION}"
+BrandingText "听说 LisTalk ${PRODUCT_VERSION}"
 
 VIProductVersion "${PRODUCT_VERSION}.0"
 VIAddVersionKey "ProductName" "${PRODUCT_NAME}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "CompanyName" "${PRODUCT_PUBLISHER}"
-VIAddVersionKey "FileDescription" "声音接力 SoundRelay 安装程序"
+VIAddVersionKey "FileDescription" "听说 LisTalk 安装程序"
 VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}"
 
 !define MUI_ICON "${SRC_DIR}\airbridge.ico"
@@ -84,7 +84,7 @@ FunctionEnd
 Page custom RebootPageCreate RebootPageLeave
 !define MUI_FINISHPAGE_RUN "$INSTDIR\AirBridge.exe"
 !define MUI_FINISHPAGE_RUN_FUNCTION "RunAirBridge"
-!define MUI_FINISHPAGE_RUN_TEXT "立即运行 声音接力 SoundRelay"
+!define MUI_FINISHPAGE_RUN_TEXT "立即运行 听说 LisTalk"
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -102,12 +102,22 @@ Section "主程序" SEC_MAIN
     WriteUninstaller "$INSTDIR\uninstall.exe"
 
     CreateDirectory "$SMPROGRAMS\AirBridge"
-    CreateShortcut "$SMPROGRAMS\AirBridge\声音接力 SoundRelay.lnk" \
-        "$INSTDIR\AirBridge.exe" "" "$INSTDIR\airbridge.ico" 0 SW_SHOWNORMAL "" "声音接力 SoundRelay"
-    CreateShortcut "$SMPROGRAMS\AirBridge\卸载 声音接力 SoundRelay.lnk" \
+    CreateShortcut "$SMPROGRAMS\AirBridge\听说 LisTalk.lnk" \
+        "$INSTDIR\AirBridge.exe" "" "$INSTDIR\airbridge.ico" 0 SW_SHOWNORMAL "" "听说 LisTalk"
+    CreateShortcut "$SMPROGRAMS\AirBridge\卸载 听说 LisTalk.lnk" \
         "$INSTDIR\uninstall.exe" "" "$INSTDIR\airbridge.ico"
-    CreateShortcut "$DESKTOP\声音接力 SoundRelay.lnk" \
-        "$INSTDIR\AirBridge.exe" "" "$INSTDIR\airbridge.ico" 0 SW_SHOWNORMAL "" "声音接力 SoundRelay"
+    CreateShortcut "$DESKTOP\听说 LisTalk.lnk" \
+        "$INSTDIR\AirBridge.exe" "" "$INSTDIR\airbridge.ico" 0 SW_SHOWNORMAL "" "听说 LisTalk"
+    ; Rename migration (v2.3.0): remove the previous brand's shortcuts,
+    ; or upgraders end up with two desktop/start-menu icons pointing at
+    ; the same exe (old names: 声音接力 SoundRelay; the MediaRelay name
+    ; was decided but never shipped — deleted defensively anyway).
+    Delete "$DESKTOP\声音接力 SoundRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\声音接力 SoundRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\卸载 声音接力 SoundRelay.lnk"
+    Delete "$DESKTOP\影音接力 MediaRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\影音接力 MediaRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\卸载 影音接力 MediaRelay.lnk"
 
     WriteRegStr HKCU "Software\AirBridge" "InstallDir" "$INSTDIR"
     WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${PRODUCT_NAME}"
@@ -119,12 +129,33 @@ Section "主程序" SEC_MAIN
     WriteRegStr HKCU "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
     WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
     WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1
+
+    ; Discovery hardening (F5): inbound firewall rule for the app
+    ; (UDP 47731, Private+Domain profiles). Without it, a Public-profile
+    ; network or a dismissed Defender prompt leaves the PC able to SEND
+    ; beacons but unable to RECEIVE anything — total silent discovery
+    ; failure. The rule name carries the current brand (听说 LisTalk,
+    ; renamed in v2.3.0) and must stay identical to FirewallGuard.RuleName
+    ; in the app, which self-checks this rule at every start. The previous
+    ; rule name (影音接力 MediaRelay — decided mid-development, never
+    ; shipped) is deleted first as upgrade migration. NOTE: this installer
+    ; is per-user (unelevated), so netsh will usually refuse here — that is
+    ; expected and NEVER fatal: the result is only logged, and the app
+    ; offers a one-click elevated repair when its start-up check finds
+    ; the rule missing.
+    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="影音接力 MediaRelay UDP 47731"'
+    Pop $0
+    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="听说 LisTalk UDP 47731"'
+    Pop $0
+    nsExec::ExecToLog 'netsh advfirewall firewall add rule name="听说 LisTalk UDP 47731" dir=in action=allow protocol=UDP localport=47731 program="$INSTDIR\AirBridge.exe" profile=private,domain enable=yes'
+    Pop $0
+    DetailPrint "防火墙入站规则添加退出码: $0（非 0 多为安装器未提权，属预期；App 启动会自检，缺失时可在诊断里一键修复）"
 SectionEnd
 
 ; Driver component per driver/INTEGRATION-IN-SETUP.md §2/§3.
 ; DEVIATION (release order for v2.2): checked by default — plain Section,
 ; no /o flag. The doc's default-unchecked is overridden on purpose.
-Section "声音接力虚拟音频设备驱动（测试签名）" SEC_DRIVER
+Section "听说虚拟音频设备驱动（测试签名）" SEC_DRIVER
     StrCpy $DriverState 1
 
     ; §3.1 release files to $INSTDIR\driver\ (flat, per spec) — plus the
@@ -230,7 +261,7 @@ Function RebootPageCreate
     ${If} $0 == error
         Abort
     ${EndIf}
-    ${NSD_CreateLabel} 0 0 100% 42u "驱动组件的特权步骤已完成：测试证书已导入、Windows 测试模式已开启、续装项已写入。$\r$\n$\r$\n重启并重新登录后，驱动安装会自动继续（登录后请点掉一次 UAC 提示），完成后 Windows 声音设置里会出现「扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备）」。"
+    ${NSD_CreateLabel} 0 0 100% 42u "驱动组件的特权步骤已完成：测试证书已导入、Windows 测试模式已开启、续装项已写入。$\r$\n$\r$\n重启并重新登录后，驱动安装会自动继续（登录后请点掉一次 UAC 提示），完成后 Windows 声音设置里会出现「扬声器 / 麦克风（听说 LisTalk 虚拟音频设备）」。"
     Pop $1
     ${NSD_CreateCheckbox} 0 48u 100% 12u "现在重启电脑（推荐）"
     Pop $RebootCheckbox
@@ -246,8 +277,8 @@ Function RebootPageLeave
 FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_MAIN} "声音接力 SoundRelay 主程序（必选）"
-    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DRIVER} "安装后，Windows 声音设置里会出现「扬声器 / 麦克风（声音接力 SoundRelay 虚拟音频设备）」，电脑声音可直接选它送往手机。注意：本驱动为测试签名版，需要关闭 Secure Boot、开启 Windows 测试模式（桌面右下角有水印），并在安装后重启一次、自动完成剩余安装。仅建议在自己的电脑上安装。不勾选也不影响使用（App 会自动回退 VB-CABLE）。"
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_MAIN} "听说 LisTalk 主程序（必选）"
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DRIVER} "安装后，Windows 声音设置里会出现「扬声器 / 麦克风（听说 LisTalk 虚拟音频设备）」，电脑声音可直接选它送往手机。注意：本驱动为测试签名版，需要关闭 Secure Boot、开启 Windows 测试模式（桌面右下角有水印），并在安装后重启一次、自动完成剩余安装。仅建议在自己的电脑上安装。不勾选也不影响使用（App 会自动回退 VB-CABLE）。"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "Uninstall"
@@ -266,9 +297,24 @@ Section "Uninstall"
         DetailPrint "驱动清理退出码: $0（非 0 也不阻断卸载）"
     ${EndIf}
 
+    ; Firewall rule cleanup (same names as install + FirewallGuard:
+    ; the current LisTalk rule and the never-shipped MediaRelay one):
+    ; unelevated it will usually fail — logged only, never blocks.
+    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="听说 LisTalk UDP 47731"'
+    Pop $0
+    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="影音接力 MediaRelay UDP 47731"'
+    Pop $0
+    DetailPrint "防火墙规则删除退出码: $0（非 0 不阻断卸载；如需彻底清理请用管理员终端执行同名 delete 命令）"
+
+    Delete "$DESKTOP\听说 LisTalk.lnk"
+    Delete "$SMPROGRAMS\AirBridge\听说 LisTalk.lnk"
+    Delete "$SMPROGRAMS\AirBridge\卸载 听说 LisTalk.lnk"
     Delete "$DESKTOP\声音接力 SoundRelay.lnk"
     Delete "$SMPROGRAMS\AirBridge\声音接力 SoundRelay.lnk"
     Delete "$SMPROGRAMS\AirBridge\卸载 声音接力 SoundRelay.lnk"
+    Delete "$DESKTOP\影音接力 MediaRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\影音接力 MediaRelay.lnk"
+    Delete "$SMPROGRAMS\AirBridge\卸载 影音接力 MediaRelay.lnk"
     RMDir "$SMPROGRAMS\AirBridge"
     DeleteRegKey HKCU "${UNINST_KEY}"
     DeleteRegKey HKCU "Software\AirBridge"

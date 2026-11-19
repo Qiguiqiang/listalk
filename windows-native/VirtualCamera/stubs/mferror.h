@@ -1,0 +1,8 @@
+#pragma once
+// STUB — see windows.h stub header note.
+#include <windows.h>
+
+constexpr HRESULT MF_E_SHUTDOWN = (HRESULT)0xC00D3E85;
+constexpr HRESULT MF_E_INVALID_STATE_TRANSITION = (HRESULT)0xC00D36E5;
+constexpr HRESULT MF_E_INVALIDMEDIATYPE = (HRESULT)0xC00D36B4;
+constexpr HRESULT MF_E_INVALIDREQUEST = (HRESULT)0xC00D36B0;

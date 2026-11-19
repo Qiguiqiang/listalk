@@ -7,7 +7,7 @@ import android.util.Log
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * mDNS/Bonjour discovery (v2.1): browses the canonical SoundRelay service
+ * mDNS/Bonjour discovery (v2.1): browses the canonical LisTalk service
  * type (Protocol.MDNS_SERVICE_TYPE, `_airbridge._udp`) via the framework
  * NsdManager — no extra permission and no third-party library needed.
  * Sightings (service name + host IP) are merged by the engine with the

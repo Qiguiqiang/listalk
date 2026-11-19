@@ -30,7 +30,7 @@ import kotlin.concurrent.thread
 import kotlin.math.abs
 
 /**
- * 声音接力 SoundRelay engine — MULTI-PC edition.
+ * 听说 LisTalk engine — MULTI-PC edition.
  *
  * - One session per PC; phone mic fans out to every connected PC.
  * - Speaker audio from all PCs is mixed (sum + clamp) with per-PC
@@ -78,7 +78,10 @@ object AudioEngine {
         var speakerVolume: Float = 0.7f,
         var muted: Boolean = false,
         var alias: String = "",
-        var lastSeenMs: Long = 0L
+        var lastSeenMs: Long = 0L,
+        /** Compact-group pin (wave 3, plan A.2.5): pinned devices sort
+         *  first among the not-connected chips; expanded cards ignore it. */
+        var pinned: Boolean = false
     ) {
         val displayName: String get() = alias.ifEmpty { name }
     }
@@ -115,11 +118,21 @@ object AudioEngine {
         @Volatile var wasPresent = false
         @Volatile var absentSinceMs = 0L
         @Volatile var returnAskRaised = false
+        // user tapped 忽略 on the return ask: periodic probing must not
+        // re-raise it (the presence-edge path honours it too) until the
+        // user accepts once or the engine restarts.
+        @Volatile var returnAskDismissed = false
         // mesh-recovery tracking (v2.2 defect A, policy in SessionRecovery.kt)
         @Volatile var helloAttempts = 0
         @Volatile var firstHelloAttemptMs = 0L
         @Volatile var reResolving = false
         @Volatile var resolvingSinceMs = 0L
+        // camera relay (wave 4): caps this PC advertised in HELLO_ACK,
+        // whether it asked for the camera stream (VIDEO_CTRL start), and
+        // the >=500 ms keyframe-request rate limit for this peer.
+        @Volatile var pcCaps: Set<String> = emptySet()
+        @Volatile var videoWanted = false
+        @Volatile var lastKeyframeReqMs = 0L
         var txSeq = 0
         var pingSeq = 0
         var rxPackets = 0L
@@ -162,7 +175,12 @@ object AudioEngine {
         val autoPaused: Boolean,
         val justAutoConnected: Boolean,
         val pcAppVersion: String = "",
-        val versionMismatch: Boolean = false
+        val versionMismatch: Boolean = false,
+        /** FB-12 density (wave 3, plan A.2.4): a connect attempt is in
+         *  flight (HELLO sent, not yet confirmed) — renders expanded. */
+        val connecting: Boolean = false,
+        /** Compact-group pin (plan A.2.5); paired devices only. */
+        val pinned: Boolean = false
     )
 
     // ---------------- UI-visible aggregate state ----------------
@@ -202,6 +220,48 @@ object AudioEngine {
     private var lastCaptureProcessMs = 0L
     private var savedAudioMode = -1
     private var savedSpeakerphone = false
+
+    // ---- audio focus pause (volume-stream fix, design §3.6) ----
+    /**
+     * True while the bridge is paused because audio focus was taken (a
+     * real incoming call, or another app grabbing focus). This flag is
+     * ONLY written by the focus listener: regaining focus clears exactly
+     * this pause and never overrides a user/session pause, which live in
+     * separate state (per-session autoPaused, channel toggles).
+     * While set: the playout loop drains jitter buffers but renders
+     * silence, and the capture loop sends NOTHING — call audio must
+     * never leak to the PCs.
+     */
+    @Volatile private var focusPaused = false
+    private val focusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            android.media.AudioManager.AUDIOFOCUS_LOSS,
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (!focusPaused) {
+                    focusPaused = true
+                    Log.i(TAG, "audio focus lost ($change): bridge paused (downlink silent, mic not sent)")
+                }
+            }
+            android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                if (focusPaused) {
+                    focusPaused = false
+                    // The telephony stack ran its own mode/route while it
+                    // held focus; re-assert our session configuration once
+                    // (a controlled exception to the set-once-at-start
+                    // rule, design §3.6).
+                    try {
+                        val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                        if (am != null && running) {
+                            am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+                            applyOutputRoute()
+                        }
+                    } catch (_: Exception) {}
+                    Log.i(TAG, "audio focus regained: bridge resumed")
+                }
+            }
+        }
+    }
 
     // ---- audio routing & capture policy (v2.1 defects 1/2/3) ----
     /** Mic sensitivity: 0 标准 / 1 高灵敏. */
@@ -485,6 +545,22 @@ object AudioEngine {
                     else -> { am.isSpeakerphoneOn = false; stopLegacySco(am) } // wired/USB route themselves
                 }
             }
+            // Volume-stream fix (§3.7): the playback track rides the MEDIA
+            // stream now, and a media track's output is chosen per-track —
+            // pin the track's preferred device to the SAME target the
+            // communication route uses, or the selector and the actual
+            // output diverge (earpiece selected, speaker sounding). Runs
+            // after every route application, including the re-pin right
+            // after buildTrack, so a fresh track adopts the target too.
+            try {
+                val t = track
+                if (t != null && target != null) {
+                    val outs = am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                    val match = outs.firstOrNull { it.type == target.type && friendlyName(it) == target.name }
+                        ?: outs.firstOrNull { it.type == target.type }
+                    if (match != null) t.setPreferredDevice(match)
+                }
+            } catch (_: Exception) {}
             // AEC interplay: headset output -> echo risk minimal, relax the
             // suppressor (NLMS keeps running on the same final-render reference).
             echoProcessor.headsetMode = target?.headset == true
@@ -618,6 +694,7 @@ object AudioEngine {
         pendingReturnAsk = null
         val s = ensureSession(ask.ip)
         s.returnAskRaised = false
+        s.returnAskDismissed = false
         s.autoPaused = false
         s.autoFailEpisodes = 0
         s.episodeStartMs = 0L
@@ -630,7 +707,12 @@ object AudioEngine {
     fun dismissReturnAsk() {
         val ask = pendingReturnAsk ?: return
         pendingReturnAsk = null
-        sessions[ask.ip]?.returnAskRaised = false
+        sessions[ask.ip]?.let {
+            it.returnAskRaised = false
+            // hardening §5.1: the periodic probe re-runs every ~15 s; a
+            // dismissed ask must stay dismissed, not re-post forever.
+            it.returnAskDismissed = true
+        }
     }
 
     /** Notification/UI 暂停: drop every session and suppress auto-connect. */
@@ -705,6 +787,38 @@ object AudioEngine {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastLocalIps: Set<String> = emptySet()
 
+    // ---------------- discovery hardening (locks / pinning / diag) ----------------
+    // F4: without a MulticastLock most WiFi chipsets drop broadcast/
+    // multicast frames before they reach our socket — the classic
+    // "sweep works, automatic discovery doesn't" pattern. Both locks are
+    // held for exactly the engine's lifetime (start -> stop).
+    private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+    /** Per-channel discovery counters + verdict inputs (§5.4). */
+    val diag = DiscoveryDiag.Counters()
+    @Volatile private var engineStartedMs = 0L
+    private var lastPairedProbeMs = 0L
+    /** Transport label of the network the socket is pinned to ("WIFI",
+     *  "ETHERNET", or "" when unpinned) — diagnostics only. */
+    @Volatile var pinnedNetworkLabel: String = ""
+        private set
+    /** Latest discovery verdict, recomputed every adapt tick (§5.4). */
+    @Volatile var currentVerdict: DiscoveryDiag.Verdict = DiscoveryDiag.Verdict.NONE
+        private set
+
+    /** One-line discovery health for the UI / a diagnostic export:
+     *  per-channel sent/received counters, the socket's pinned network
+     *  and the current verdict. Plain technical text by design (same
+     *  register as playoutDiagText). */
+    fun discoveryDiagText(): String {
+        val s = diag.snapshot()
+        fun ch(c: DiscoveryDiag.Channel) = "${s.sent(c)}/${s.received(c)}"
+        return "发现通道 发/收 — 广播 ${ch(DiscoveryDiag.Channel.BROADCAST)} · " +
+            "mDNS ${ch(DiscoveryDiag.Channel.MDNS)} · 扫描 ${ch(DiscoveryDiag.Channel.SWEEP)} · " +
+            "蓝牙 ${ch(DiscoveryDiag.Channel.BLE)} · 直连 ${ch(DiscoveryDiag.Channel.DIRECT)} · " +
+            "网络 ${pinnedNetworkLabel.ifEmpty { "未绑定" }} · 判定 $currentVerdict"
+    }
+
     private var recorder: AudioRecord? = null
     private var recorderRateHz = 0
     @Volatile private var recorderBuiltRate = -1
@@ -730,6 +844,7 @@ object AudioEngine {
         try {
             val s = DatagramSocket(null)
             s.reuseAddress = true
+            pinSocketToLan(s) // hardening §5.6: pin before bind (see rebindSocket)
             s.bind(java.net.InetSocketAddress(Protocol.PORT))
             s.broadcast = true
             s.soTimeout = 500
@@ -740,6 +855,8 @@ object AudioEngine {
             return
         }
         running = true
+        engineStartedMs = System.currentTimeMillis()
+        acquireWifiLocks()
         statusText = str(R.string.status_searching_pc)
         // ONE persistent audio configuration for the whole session (defects
         // 1+2, research note §5.1): save old mode -> MODE_IN_COMMUNICATION
@@ -751,20 +868,22 @@ object AudioEngine {
             savedAudioMode = am.mode
             @Suppress("DEPRECATION") savedSpeakerphone = am.isSpeakerphoneOn
             am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
-            if (Build.VERSION.SDK_INT >= 26) {
-                val attrs = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
-                val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(attrs)
-                    .setWillPauseWhenDucked(false)
-                    .build()
-                audioFocusRequest = req
-                am.requestAudioFocus(req)
-            } else {
-                @Suppress("DEPRECATION")
-                am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            }
+            // minSdk is 26 (build script), so the AudioFocusRequest path is
+            // the only one. The request carries the MEDIA attributes of the
+            // playback track (volume-stream fix): for the session we are a
+            // media player (AUDIOFOCUS_GAIN), and the focus listener is
+            // what pauses the bridge for a real phone call (§3.6) — it was
+            // previously not registered at all.
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
+            val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener(focusChangeListener, android.os.Handler(android.os.Looper.getMainLooper()))
+                .build()
+            audioFocusRequest = req
+            am.requestAudioFocus(req)
             applyOutputRoute()
             // OEMs may silently reset communication routing when audio
             // devices come and go: re-apply OUR pinned route (restore, not
@@ -874,6 +993,7 @@ object AudioEngine {
         try {
             val s = DatagramSocket(null)
             s.reuseAddress = true
+            pinSocketToLan(s) // pin BEFORE bind so no packet can leak via the old default route
             s.bind(java.net.InetSocketAddress(Protocol.PORT))
             s.broadcast = true
             s.soTimeout = 500
@@ -883,6 +1003,104 @@ object AudioEngine {
             return
         }
         try { old?.close() } catch (_: Exception) {}
+    }
+
+    // ---------------- WiFi locks + LAN socket pinning (F4 / F3) ----------------
+
+    private fun acquireWifiLocks() {
+        val ctx = appContext ?: return
+        try {
+            val wm = ctx.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return
+            if (multicastLock == null) {
+                val lock = wm.createMulticastLock("soundrelay-discovery")
+                lock.setReferenceCounted(false)
+                lock.acquire()
+                multicastLock = lock
+            }
+            if (wifiLock == null) {
+                @Suppress("DEPRECATION")
+                val mode = if (Build.VERSION.SDK_INT >= 29)
+                    android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                else android.net.wifi.WifiManager.WIFI_MODE_FULL
+                val lock = wm.createWifiLock(mode, "soundrelay-engine")
+                lock.setReferenceCounted(false)
+                lock.acquire()
+                wifiLock = lock
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "wifi locks failed: ${e.message}")
+        }
+    }
+
+    private fun releaseWifiLocks() {
+        try { if (multicastLock?.isHeld == true) multicastLock?.release() } catch (_: Exception) {}
+        multicastLock = null
+        try { if (wifiLock?.isHeld == true) wifiLock?.release() } catch (_: Exception) {}
+        wifiLock = null
+        pinnedNetworkLabel = ""
+    }
+
+    /** The LAN network to pin discovery/session traffic to: WiFi or
+     *  Ethernet, never a VPN (a VPN's own Network object also carries
+     *  the underlying transports in its capabilities on some builds, so
+     *  TRANSPORT_VPN is excluded explicitly). Null = no LAN available. */
+    private fun lanNetwork(): Network? {
+        val ctx = appContext ?: return null
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        var ethernet: Network? = null
+        try {
+            for (n in cm.allNetworks) {
+                val caps = cm.getNetworkCapabilities(n) ?: continue
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return n
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) ethernet = n
+            }
+        } catch (_: Exception) {}
+        return ethernet
+    }
+
+    /** Is the process DEFAULT network the home LAN? false only when we
+     *  positively know it is not (VPN-only or cellular-only default) —
+     *  that is the F3 hijack the WRONG_NETWORK verdict reports. */
+    private fun defaultNetworkIsLan(): Boolean? {
+        val ctx = appContext ?: return null
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        return try {
+            val active = cm.activeNetwork ?: return null
+            val caps = cm.getNetworkCapabilities(active) ?: return null
+            when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> false
+                else -> null
+            }
+        } catch (_: Exception) { null }
+    }
+
+    /** Pin the engine socket to the LAN network (§5.6) so broadcasts,
+     *  sweep probes and HELLOs cannot egress into a VPN tunnel or the
+     *  cellular default route while the phone shows "WiFi connected". */
+    private fun pinSocketToLan(sock: DatagramSocket) {
+        val n = lanNetwork()
+        if (n == null) {
+            pinnedNetworkLabel = ""
+            return
+        }
+        try {
+            n.bindSocket(sock)
+            val ctx = appContext
+            val cm = ctx?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val caps = cm?.getNetworkCapabilities(n)
+            pinnedNetworkLabel = when {
+                caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "WIFI"
+                caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "ETHERNET"
+                else -> "LAN"
+            }
+        } catch (e: Exception) {
+            pinnedNetworkLabel = ""
+            Log.w(TAG, "socket pin to LAN failed: ${e.message}")
+        }
     }
 
     /** Move a session to a fresh address for the SAME deviceId, carrying
@@ -964,6 +1182,22 @@ object AudioEngine {
         try { bleDiscovery?.start() } catch (_: Exception) {}
     }
 
+    /**
+     * Pull-to-refresh (wave 3, plan A.1.4): restart the discovery layer
+     * and start a fresh cross-subnet sweep cycle + paired probe right
+     * away instead of waiting for their schedules. HARD CONSTRAINT from
+     * the plan: this must never touch a live session — and it doesn't:
+     * the BLE restart only cycles the scanner, the sweep plan only
+     * re-queues DISCOVER probes (consent still decides connections
+     * inside onDeviceReappeared), and the socket/sessions are untouched.
+     */
+    fun refreshDiscovery() {
+        restartDiscovery()
+        sweepPlan.beginCycle()
+        sweepCycleDoneAtMs = 0L
+        lastPairedProbeMs = 0L
+    }
+
     /** Start the BLE scan if permission is now held but the scan never started
      *  (engine start usually precedes the permission grant). */
     fun ensureBleScan() {
@@ -1025,19 +1259,22 @@ object AudioEngine {
     }
 
     fun onBleSighting(deviceIdHint: String?, address: String, rssi: Int) {
+        diag.inc(DiscoveryDiag.Channel.BLE, DiscoveryDiag.Dir.RECEIVED)
         upsertNearby(deviceIdHint, null, "", "", "BLE", rssi, address)
     }
 
     fun onMdnsSighting(name: String, ip: String) {
+        diag.inc(DiscoveryDiag.Channel.MDNS, DiscoveryDiag.Dir.RECEIVED)
         upsertNearby(null, ip, name, "", "MDNS", null, null)
     }
 
-    /** Fresh (<5 s) nearby devices for the pairing sheet: paired pinned first,
-     *  then strongest BLE RSSI, then most recent. */
+    /** Fresh (<7 s, aligned with PeerDirectory.FRESH_MS) nearby devices
+     *  for the pairing sheet: paired pinned first, then strongest BLE
+     *  RSSI, then most recent. */
     fun nearbyDevices(): List<NearbyDevice> {
         val now = System.currentTimeMillis()
         return nearby.values
-            .filter { now - it.lastSeenMs < 5000 }
+            .filter { now - it.lastSeenMs < PeerDirectory.FRESH_MS }
             .sortedWith(
                 compareByDescending<NearbyDevice> { it.deviceId != null && registry.containsKey(it.deviceId) }
                     .thenByDescending { it.rssi ?: Int.MIN_VALUE }
@@ -1047,11 +1284,13 @@ object AudioEngine {
 
     fun stop() {
         if (!running) return
+        stopCameraRelay()
         for (s in sessions.values) {
             s.addr?.let { sendTo(Protocol.TYPE_BYE, ByteArray(0), it) }
         }
         running = false
         unregisterNetworkCallback()
+        releaseWifiLocks()
         stopDiscovery()
         nearby.clear()
         pendingReturnAsk = null
@@ -1083,6 +1322,7 @@ object AudioEngine {
                 }
             }
         } catch (_: Exception) {}
+        focusPaused = false
         loopGuard.reset()
         saveRegistry()
     }
@@ -1113,7 +1353,8 @@ object AudioEngine {
                     speakerVolume = o.optDouble("speakerVolume", 0.7).toFloat(),
                     muted = o.optBoolean("muted", false),
                     alias = o.optString("alias"),
-                    lastSeenMs = o.optLong("lastSeenMs", 0L)
+                    lastSeenMs = o.optLong("lastSeenMs", 0L),
+                    pinned = o.optBoolean("pinned", false)
                 )
                 registry[d.deviceId] = d
             }
@@ -1133,7 +1374,7 @@ object AudioEngine {
                 .put("autoConnect", d.autoConnect).put("micSend", d.micSend)
                 .put("speakerRecv", d.speakerRecv).put("speakerVolume", d.speakerVolume.toDouble())
                 .put("muted", d.muted).put("alias", d.alias)
-                .put("lastSeenMs", d.lastSeenMs))
+                .put("lastSeenMs", d.lastSeenMs).put("pinned", d.pinned))
         }
         p.edit().putString("devices", arr.toString()).apply()
         lastRegistrySaveMs = System.currentTimeMillis()
@@ -1154,7 +1395,7 @@ object AudioEngine {
         for (d in registry.values) {
             val ip = presenceIp[d.deviceId] ?: d.lastIp
             val sess = sessions[ip]
-            val online = (presence[d.deviceId]?.let { now - it < 3000 } == true) || (sess?.connected == true)
+            val online = (presence[d.deviceId]?.let { now - it < PeerDirectory.FRESH_MS } == true) || (sess?.connected == true)
             out.add(DeviceView(
                 deviceId = d.deviceId, ip = ip, name = d.displayName, os = d.os,
                 paired = true, online = online, connected = sess?.connected == true,
@@ -1165,7 +1406,9 @@ object AudioEngine {
                 autoPaused = sess?.autoPaused == true,
                 justAutoConnected = sess?.justAutoConnectedMs?.let { now - it < 60000 } == true,
                 pcAppVersion = sess?.pcAppVersion ?: "",
-                versionMismatch = sess?.versionMismatch == true
+                versionMismatch = sess?.versionMismatch == true,
+                connecting = sess?.let { isConnecting(it, now) } == true,
+                pinned = d.pinned
             ))
             seenIps.add(ip)
         }
@@ -1173,7 +1416,7 @@ object AudioEngine {
         for (s in sessions.values.sortedBy { it.name }) {
             if (s.ip in seenIps) continue
             if (s.deviceId != null && registry.containsKey(s.deviceId)) continue
-            val online = now - s.lastBeaconMs < 3000 || s.connected
+            val online = now - s.lastBeaconMs < PeerDirectory.FRESH_MS || s.connected
             if (!online && !s.wantConnect) continue
             out.add(DeviceView(
                 deviceId = s.deviceId, ip = s.ip, name = s.name, os = s.os,
@@ -1182,7 +1425,8 @@ object AudioEngine {
                 autoConnect = false, micSend = true, speakerRecv = true, speakerVolume = 0.7f,
                 muted = false, lastSeenMs = s.lastConnectedMs,
                 autoPaused = false, justAutoConnected = false,
-                pcAppVersion = s.pcAppVersion, versionMismatch = s.versionMismatch
+                pcAppVersion = s.pcAppVersion, versionMismatch = s.versionMismatch,
+                connecting = isConnecting(s, now)
             ))
         }
         // spec order: streaming > online > offline; recent first within a tier
@@ -1234,10 +1478,16 @@ object AudioEngine {
     fun pendingPairSession(): Session? =
         sessions.values.firstOrNull { it.pendingPairToken != null && it.connected }
 
-    fun confirmPairing(ip: String, autoConnect: Boolean) {
-        val s = sessions[ip] ?: return
-        val token = s.pendingPairToken ?: return
-        val deviceId = s.deviceId ?: return
+    /**
+     * Register the pending pairing. Returns false when there is nothing
+     * to register (session gone / no pending token / no device id) —
+     * the caller must surface that instead of pretending success (B-05:
+     * the confirm overlay used to close optimistically either way).
+     */
+    fun confirmPairing(ip: String, autoConnect: Boolean): Boolean {
+        val s = sessions[ip] ?: return false
+        val token = s.pendingPairToken ?: return false
+        val deviceId = s.deviceId ?: return false
         val existing = registry[deviceId]
         if (existing == null) {
             registry[deviceId] = PairedDevice(
@@ -1257,6 +1507,7 @@ object AudioEngine {
         s.pendingPairCode = null
         saveRegistry()
         Log.i(TAG, "pairing confirmed with ${s.name} ($deviceId)")
+        return true
     }
 
     fun cancelPairing(ip: String) {
@@ -1331,6 +1582,26 @@ object AudioEngine {
         registry[deviceId]?.let { it.alias = alias.trim(); saveRegistry() }
     }
 
+    /**
+     * FB-12 "connecting" for the density forms (wave 3): an attempt is
+     * genuinely in flight — the reconnect window after a drop
+     * (reResolving), or HELLOs are actually going out for a wanted
+     * session. Deliberately NOT just wantConnect: an auto-paused
+     * session keeps wantConnect set while its fuse is tripped, and a
+     * wanted session whose PC has been gone for a while is offline,
+     * not connecting — both render as compact chips.
+     */
+    private fun isConnecting(s: Session, now: Long): Boolean =
+        !s.connected && !s.autoPaused &&
+            (s.reResolving || (s.wantConnect &&
+                (s.lastHelloMs == 0L || now - s.lastHelloMs < 12000)))
+
+    /** Compact-group pin (wave 3, plan A.2.5): sort order only, no
+     *  effect on connection behaviour. */
+    fun setPinned(deviceId: String, on: Boolean) {
+        registry[deviceId]?.let { it.pinned = on; saveRegistry() }
+    }
+
     fun pairingInfo(deviceId: String): String? {
         val d = registry[deviceId] ?: return null
         return str(R.string.pairing_info_format, d.deviceId, tokenHash(d.token).substring(0, 16), d.lastIp)
@@ -1386,6 +1657,13 @@ object AudioEngine {
             .put("codec", "pcm16")
             .put("appVersion", UpdateChecker.APP_VERSION)
             .put("protoVersion", Protocol.PROTO_VERSION)
+            // camera-relay capability (wave 4): negotiated here, never by
+            // raising PROTO_VERSION — old PCs simply never see the field.
+            .put("caps", org.json.JSONArray().put(Protocol.CAP_VIDEO1))
+        // The PC initializes its 手机音量 slider from OUR registry value
+        // (single source of truth, §3.4) instead of a locally persisted
+        // guess — report this PC's per-device gain with every HELLO.
+        if (paired != null) json.put("speakerVolume", paired.speakerVolume.toDouble())
         if (paired != null && paired.token.isNotEmpty()) {
             json.put("tokenHash", tokenHash(paired.token))
         }
@@ -1393,6 +1671,7 @@ object AudioEngine {
         if (s.pairQr) json.put("pairQr", true)
         s.pendingPairCode?.let { json.put("pairCode", it) }
         sendTo(Protocol.TYPE_HELLO, json.toString().toByteArray(Charsets.UTF_8), addr)
+        diag.inc(DiscoveryDiag.Channel.DIRECT, DiscoveryDiag.Dir.SENT)
         s.lastHelloMs = System.currentTimeMillis()
         // recovery bookkeeping (v2.2 defect A): attempts since the last
         // HELLO_ACK drive the retry backoff and the isolation verdict.
@@ -1423,6 +1702,7 @@ object AudioEngine {
         val bytes = codeSearchPacket(code)
         try {
             sock.send(DatagramPacket(bytes, bytes.size, InetAddress.getByName("255.255.255.255"), Protocol.PORT))
+            diag.inc(DiscoveryDiag.Channel.BROADCAST, DiscoveryDiag.Dir.SENT)
         } catch (_: Exception) {}
     }
 
@@ -1444,6 +1724,7 @@ object AudioEngine {
             try {
                 val addr = InetAddress.getByName(ip) ?: continue
                 sock.send(DatagramPacket(bytes, bytes.size, addr, Protocol.PORT))
+                diag.inc(DiscoveryDiag.Channel.DIRECT, DiscoveryDiag.Dir.SENT)
             } catch (_: Exception) {}
         }
     }
@@ -1463,6 +1744,7 @@ object AudioEngine {
         val bytes = discoverPacket()
         try {
             sock.send(DatagramPacket(bytes, bytes.size, InetAddress.getByName("255.255.255.255"), Protocol.PORT))
+            diag.inc(DiscoveryDiag.Channel.BROADCAST, DiscoveryDiag.Dir.SENT)
         } catch (_: Exception) {}
     }
 
@@ -1475,8 +1757,38 @@ object AudioEngine {
      * Gray's three subnets is ~760 probes ≈ 26 ticks; paired last IPs
      * and gateways are probed in the first tick.
      */
+    /** Local IPv4 addresses split by interface kind (hardening F9):
+     *  WiFi/Ethernet = physical; VPN and cellular = virtual. The sweep
+     *  candidate ordering ranks physical above virtual so a pile of
+     *  tunnel adapters can never crowd out real LAN subnets. */
+    private fun localIpClasses(): Pair<List<Int>, List<Int>> {
+        val physical = ArrayList<Int>()
+        val virtual = ArrayList<Int>()
+        val ctx = appContext ?: return physical to virtual
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return physical to virtual
+        try {
+            for (n in cm.allNetworks) {
+                val caps = cm.getNetworkCapabilities(n)
+                val isPhysical = caps != null &&
+                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+                val lp = cm.getLinkProperties(n) ?: continue
+                for (la in lp.linkAddresses) {
+                    val a = la.address
+                    if (a.isLoopbackAddress || a !is java.net.Inet4Address) continue
+                    val v = SubnetSweep.parseIpv4(a.hostAddress ?: continue) ?: continue
+                    if (isPhysical) physical.add(v) else virtual.add(v)
+                }
+            }
+        } catch (_: Exception) {}
+        return physical to virtual
+    }
+
     private fun driveSweep(nowMs: Long) {
-        val localIps = lastLocalIps.mapNotNull { SubnetSweep.parseIpv4(it) }
+        val (localPhysical, localVirtual) = localIpClasses()
+        val localIps = localPhysical + localVirtual
         val pairedIps = registry.values.mapNotNull { SubnetSweep.parseIpv4(it.lastIp) }
         val extras = SubnetSweep.splitSpecs(extraSubnetsRaw)
         val sig = localIps.joinToString(",") + "|" + pairedIps.joinToString(",") + "|" + extras.joinToString(",")
@@ -1489,7 +1801,7 @@ object AudioEngine {
             prio.addAll(pairedIps)
             for (v in presenceIp.values) SubnetSweep.parseIpv4(v)?.let { prio.add(it) }
             sweepPlan.reset(
-                SubnetSweep.candidateSubnets(localIps, pairedIps, extras),
+                SubnetSweep.candidateSubnets(localPhysical, localVirtual, pairedIps, extras),
                 prio.toList(),
                 localIps.toSet()
             )
@@ -1511,21 +1823,26 @@ object AudioEngine {
             try {
                 val addr = InetAddress.getByName(SubnetSweep.formatIpv4(target)) ?: continue
                 sock.send(DatagramPacket(bytes, bytes.size, addr, Protocol.PORT))
+                diag.inc(DiscoveryDiag.Channel.SWEEP, DiscoveryDiag.Dir.SENT)
             } catch (_: Exception) {}
         }
     }
 
     /** Discovery is "active" for sweep purposes while the UI is in the
      *  foreground (device list / discover sheet), a code search runs, a
-     *  session is trying to connect, or a paired PC is being sought
-     *  under a reconnect mode that allows auto-connect. Otherwise the
+     *  session is trying to connect, or any paired PC with a stored
+     *  address is unconnected. The last clause is the hardening §5.5
+     *  change: the sweep is PROBING, not connecting — it stays allowed
+     *  in every reconnect mode (including 从不自动), because presence
+     *  learned by probing still feeds the consent machinery and the
+     *  device list; it never by itself opens a session. Otherwise the
      *  sweep stays silent (battery) — broadcast discovery is unaffected. */
     private fun sweepActive(nowMs: Long): Boolean {
         if (uiInForeground || codeSearch != null) return true
         if (sessions.values.any { it.wantConnect && !it.connected }) return true
-        if (!userPaused && reconnectMode != RECONNECT_NEVER) {
+        if (!userPaused) {
             for (d in registry.values) {
-                if (!d.autoConnect) continue
+                if (d.lastIp.isEmpty()) continue
                 val s = sessions.values.firstOrNull { it.deviceId == d.deviceId }
                 if (s == null || !s.connected) return true
             }
@@ -1561,6 +1878,39 @@ object AudioEngine {
         }
     }
 
+    /**
+     * Periodic paired probing (hardening §5.1): every ~15 s, aim the
+     * stored-IP machinery at every paired PC that is neither connected
+     * nor freshly present — regardless of the cold-start restriction in
+     * [tryDirectReconnectPaired]. The §3.1 hole this closes: the old
+     * triggers were purely event-driven, so a PC that came online ten
+     * minutes after the phone (with no network change and no presence
+     * edge on the phone) was never retried. CONSENT IS UNCHANGED: the
+     * decision still happens inside [onDeviceReappeared] — AUTO
+     * connects, NEVER does nothing, ASK raises the return-ask (once;
+     * a dismissed ask stays dismissed, see Session.returnAskDismissed).
+     * The absence fed to the policy is honest: the session's absence
+     * clock when known, else the registry's persisted last-seen, else
+     * "long" — never the fake 0 that would read as a short dropout.
+     */
+    private fun probePairedStoredIps(nowMs: Long) {
+        if (userPaused) return
+        for (d in registry.values) {
+            if (!d.autoConnect || d.lastIp.isEmpty()) continue
+            val existing = sessions.values.firstOrNull { it.deviceId == d.deviceId }
+            if (existing != null && (existing.connected || existing.wantConnect)) continue
+            if (peerDirectory.isFresh(d.deviceId, nowMs)) continue // presence flow owns it
+            val absentFor = when {
+                existing != null && existing.absentSinceMs > 0L -> nowMs - existing.absentSinceMs
+                d.lastSeenMs > 0L -> nowMs - d.lastSeenMs
+                else -> Long.MAX_VALUE / 4
+            }
+            val s = ensureSession(d.lastIp)
+            if (s.deviceId == null) s.deviceId = d.deviceId
+            onDeviceReappeared(s, d, absentFor, nowMs)
+        }
+    }
+
     // ---------------- receive ----------------
 
     private fun recvLoop() {
@@ -1578,6 +1928,7 @@ object AudioEngine {
                     onPresence(json, ip, nowMs)
                 }
                 Protocol.TYPE_HELLO_ACK -> {
+                    diag.inc(DiscoveryDiag.Channel.DIRECT, DiscoveryDiag.Dir.RECEIVED)
                     SubnetSweep.parseIpv4(ip)?.let { sweepPlan.noteResponse(it) }
                     val s = ensureSession(ip)
                     val wasConnected = s.connected
@@ -1637,11 +1988,43 @@ object AudioEngine {
                 Protocol.TYPE_BYE -> {
                     sessions[ip]?.let { it.connected = false; it.resetJitterBuffer() }
                 }
+                Protocol.TYPE_SET_VOLUME -> {
+                    // PC-side 手机音量 slider (remote control): apply at
+                    // the SAME registry point the device-card slider uses
+                    // (setSpeakerVolume) — one value, two handles (§3.4).
+                    val s = sessions[ip]
+                    if (s != null) {
+                        val json = String(buf, Protocol.HEADER_SIZE, pkt.length - Protocol.HEADER_SIZE, Charsets.UTF_8)
+                        val v = try { JSONObject(json).optDouble("speakerVolume", Double.NaN) } catch (_: Exception) { Double.NaN }
+                        val deviceId = s.deviceId ?: pairedFor(s)?.deviceId
+                        if (!v.isNaN() && deviceId != null) setSpeakerVolume(deviceId, v.toFloat())
+                    }
+                }
+                Protocol.TYPE_VIDEO_CTRL -> {
+                    // camera-relay control (wave 4): start/stop for THIS
+                    // session only; the relay itself is shared and stops
+                    // when no session wants it any more.
+                    val s = sessions[ip]
+                    if (s != null) {
+                        val json = String(buf, Protocol.HEADER_SIZE, pkt.length - Protocol.HEADER_SIZE, Charsets.UTF_8)
+                        handleVideoCtrl(s, json)
+                    }
+                }
+                Protocol.TYPE_VIDEO_KEYFRAME_REQ -> {
+                    // decoder on the PC lost sync: ask the encoder for an
+                    // IDR, rate-limited to >=500 ms per session (plan §B.2).
+                    val s = sessions[ip]
+                    if (s != null && cameraRelayActive && nowMs - s.lastKeyframeReqMs >= 500) {
+                        s.lastKeyframeReqMs = nowMs
+                        cameraRelay?.requestKeyframe()
+                    }
+                }
             }
         }
     }
 
     private fun onPresence(json: String, ip: String, nowMs: Long) {
+        diag.inc(DiscoveryDiag.Channel.BROADCAST, DiscoveryDiag.Dir.RECEIVED)
         // a sighting answers the sweep: don't re-probe this host this cycle
         SubnetSweep.parseIpv4(ip)?.let { sweepPlan.noteResponse(it) }
         val o = try { JSONObject(json) } catch (_: Exception) { return }
@@ -1696,7 +2079,7 @@ object AudioEngine {
             absentForMs <= SHORT_DROPOUT_MS -> { s.autoInitiated = true; s.wantConnect = true }
             reconnectMode == RECONNECT_AUTO -> { s.autoInitiated = true; s.wantConnect = true }
             reconnectMode == RECONNECT_NEVER -> { /* manual only */ }
-            absentForMs >= LONG_ABSENCE_MS -> raiseReturnAsk(s, paired, nowMs)
+            absentForMs >= LONG_ABSENCE_MS -> if (!s.returnAskDismissed) raiseReturnAsk(s, paired, nowMs)
             else -> { s.autoInitiated = true; s.wantConnect = true }
         }
     }
@@ -1731,7 +2114,7 @@ object AudioEngine {
                     android.app.PendingIntent.getService(ctx, req, i, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
             }
             val n = android.app.Notification.Builder(ctx, "airbridge_ask")
-                .setContentTitle("声音接力 SoundRelay")
+                .setContentTitle("听说 LisTalk")
                 .setContentText(str(R.string.return_ask_text, name))
                 .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
                 .setContentIntent(openPi)
@@ -1781,6 +2164,17 @@ object AudioEngine {
         val os = o.optString("os")
         if (os.isNotEmpty()) s.os = os
         updateVersionInfo(s, o)
+        // camera-relay capability of this PC (wave 4): video is enabled
+        // for a session only when BOTH ends advertised "video1".
+        val capsArr = o.optJSONArray("caps")
+        if (capsArr != null) {
+            val caps = HashSet<String>()
+            for (i in 0 until capsArr.length()) capsArr.optString(i).takeIf { it.isNotEmpty() }?.let { caps.add(it) }
+            s.pcCaps = caps
+            // a PC that (re)connected mid-stream and wants video gets the
+            // config for the already-running relay right away.
+            if (s.videoWanted && cameraRelayActive) sendVideoConfigTo(s)
+        }
         val verify = o.optString("verifyCode")
         if (verify.isNotEmpty()) s.pendingVerifyCode = verify
         val token = o.optString("token")
@@ -1803,6 +2197,218 @@ object AudioEngine {
             }
         }
         s.pairQr = false
+    }
+
+    // ---------------- camera relay (wave 4) ----------------
+    // Capture/encode lives in CameraRelay; this section owns the wire.
+    // Encoded AUs land in a bounded queue and a dedicated sender thread
+    // packetizes + fans them out, so video can never block the audio
+    // send path (plan §B.2 hard rule). Under pressure the queue drops
+    // VIDEO frames — audio is never dropped or delayed for video.
+
+    @Volatile var cameraRelayActive = false
+        private set
+    @Volatile private var cameraRelay: CameraRelay? = null
+    @Volatile private var videoConfigJson: String? = null
+    @Volatile private var lastCameraError: String? = null
+
+    private class VideoFrame(val au: ByteArray, val keyframe: Boolean, val captureUs: Long)
+
+    private val videoTxQueue = java.util.concurrent.ArrayBlockingQueue<VideoFrame>(60)
+    private var videoTxThread: Thread? = null
+    @Volatile private var videoFrameId = 0
+    @Volatile private var videoTxSeq = 0
+
+    // counters (in-app diagnostics + bench verification via logcat)
+    @Volatile var videoFramesEncoded = 0L
+        private set
+    @Volatile var videoFramesPacketized = 0L
+        private set
+    @Volatile var videoPacketsSent = 0L
+        private set
+    @Volatile var videoDroppedQueue = 0L
+        private set
+    @Volatile var videoDroppedNoTarget = 0L
+        private set
+
+    val videoStatsText: String
+        get() = "encoded=$videoFramesEncoded packetized=$videoFramesPacketized sentPkts=$videoPacketsSent " +
+            "droppedQueue=$videoDroppedQueue droppedNoTarget=$videoDroppedNoTarget active=$cameraRelayActive"
+
+    private val videoListener = object : CameraRelay.Listener {
+        override fun onConfig(configJson: JSONObject, csdAnnexB: ByteArray) {
+            videoConfigJson = configJson.toString()
+            // every session that asked for video gets the config (sent
+            // x3 against UDP loss, plan §B.2); late joiners get it from
+            // onHelloAck / their own VIDEO_CTRL start.
+            for (s in sessions.values) if (s.videoWanted) sendVideoConfigTo(s)
+        }
+
+        override fun onEncodedFrame(au: ByteArray, keyframe: Boolean, captureUs: Long) {
+            videoFramesEncoded++
+            if (!videoTxQueue.offer(VideoFrame(au, keyframe, captureUs))) videoDroppedQueue++
+        }
+
+        override fun onError(reason: String) {
+            Log.w(TAG, "VideoRelay error: $reason")
+            lastCameraError = reason
+            val wasActive = cameraRelayActive
+            cameraRelayActive = false
+            cameraRelay = null
+            if (wasActive) for (s in sessions.values) if (s.videoWanted) sendVideoState(s, false, reason)
+            refreshServiceForegroundType()
+        }
+    }
+
+    @Synchronized
+    fun startCameraRelay(quality: String = "720p") {
+        if (cameraRelayActive) return
+        val ctx = appContext
+        if (ctx == null) {
+            lastCameraError = "no context"
+            return
+        }
+        if (ctx.checkSelfPermission(android.Manifest.permission.CAMERA) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            lastCameraError = "camera permission not granted"
+            Log.w(TAG, "VideoRelay: CAMERA permission not granted")
+            return
+        }
+        val relay = CameraRelay(ctx, videoListener)
+        cameraRelay = relay
+        videoConfigJson = null
+        videoFrameId = 0
+        videoTxSeq = 0
+        cameraRelayActive = true
+        ensureVideoTxThread()
+        relay.start(quality)
+        refreshServiceForegroundType()
+        Log.i(TAG, "VideoRelay started (quality=$quality)")
+    }
+
+    @Synchronized
+    fun stopCameraRelay() {
+        if (!cameraRelayActive && cameraRelay == null) return
+        cameraRelayActive = false
+        val relay = cameraRelay
+        cameraRelay = null
+        videoConfigJson = null
+        videoTxQueue.clear()
+        try { relay?.stop() } catch (_: Exception) {}
+        refreshServiceForegroundType()
+        Log.i(TAG, "VideoRelay stopped: $videoStatsText")
+    }
+
+    /** The one UI hook for wave 4 stage 1 (MainActivity's toggle
+     * button); the full camera UI is wave 3. Returns the new state. */
+    fun toggleCameraRelay(): Boolean {
+        if (cameraRelayActive) {
+            stopCameraRelay()
+            return false
+        }
+        startCameraRelay()
+        return cameraRelayActive
+    }
+
+    private fun ensureVideoTxThread() {
+        if (videoTxThread?.isAlive == true) return
+        val t = Thread({
+            var lastLogMs = 0L
+            while (running) {
+                val frame = try {
+                    videoTxQueue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    null
+                }
+                if (frame == null) {
+                    if (!cameraRelayActive && videoTxQueue.isEmpty()) break
+                    continue
+                }
+                val payloads = try {
+                    VideoPackets.splitPayloads(videoFrameId, frame.au, frame.keyframe)
+                } catch (_: Exception) {
+                    continue
+                }
+                videoFrameId++
+                videoFramesPacketized++
+                val targets = sessions.values.filter { it.connected && it.videoWanted && it.addr != null }
+                val now = System.currentTimeMillis()
+                if (now - lastLogMs >= 2000) {
+                    lastLogMs = now
+                    Log.i(TAG, "VideoRelay $videoStatsText targets=${targets.size}")
+                }
+                if (targets.isEmpty()) {
+                    videoDroppedNoTarget++
+                    continue
+                }
+                var seq = videoTxSeq
+                for (payload in payloads) {
+                    for (s in targets) {
+                        // flags = 0: the header's codec/rate bits are an
+                        // audio concept; video types don't use them.
+                        sendTo(Protocol.TYPE_VIDEO_DATA, payload, s.addr!!, seq = seq, tsUs = frame.captureUs, flags = 0)
+                        videoPacketsSent++
+                    }
+                    seq++
+                }
+                videoTxSeq = seq
+            }
+        }, "sr-video-tx")
+        t.isDaemon = true
+        videoTxThread = t
+        t.start()
+    }
+
+    private fun sendVideoConfigTo(s: Session) {
+        val addr = s.addr ?: return
+        val json = videoConfigJson ?: return
+        // plan §B.2: the config is small and priceless (nothing decodes
+        // without the CSD) — send it 3x against UDP loss.
+        repeat(3) { sendTo(Protocol.TYPE_VIDEO_CONFIG, json.toByteArray(Charsets.UTF_8), addr) }
+    }
+
+    private fun sendVideoState(s: Session, streaming: Boolean, reason: String? = null) {
+        val addr = s.addr ?: return
+        val json = JSONObject().put("action", "state").put("streaming", streaming)
+        if (reason != null) json.put("reason", reason)
+        sendTo(Protocol.TYPE_VIDEO_CTRL, json.toString().toByteArray(Charsets.UTF_8), addr)
+    }
+
+    private fun handleVideoCtrl(s: Session, json: String) {
+        val o = try { JSONObject(json) } catch (_: Exception) { return }
+        when (o.optString("action")) {
+            "start" -> {
+                // capability gate (plan §B.2): only a PC that advertised
+                // video1 in its HELLO_ACK may start the camera.
+                if (Protocol.CAP_VIDEO1 !in s.pcCaps) {
+                    sendVideoState(s, false, "pc did not advertise video1")
+                    return
+                }
+                s.videoWanted = true
+                startCameraRelay(o.optString("quality", "720p"))
+                sendVideoState(s, cameraRelayActive, if (cameraRelayActive) null else lastCameraError)
+                if (cameraRelayActive) sendVideoConfigTo(s)
+            }
+            "stop" -> {
+                s.videoWanted = false
+                if (sessions.values.none { it.videoWanted }) stopCameraRelay()
+                sendVideoState(s, false)
+            }
+        }
+    }
+
+    /** Android 14: an FGS that uses the camera must carry the camera
+     * foreground-service type. Ask BridgeService to re-post its
+     * foreground notification with the right type set (it reads
+     * [cameraRelayActive]). A no-op while the service isn't running —
+     * in Activity-bound mode the app is in the foreground, where
+     * camera access needs no FGS type. */
+    private fun refreshServiceForegroundType() {
+        if (!BridgeService.isRunning) return
+        val ctx = appContext ?: return
+        try {
+            ctx.startService(android.content.Intent(ctx, BridgeService::class.java).setAction(BridgeService.ACTION_REFRESH_FG))
+        } catch (_: Exception) {}
     }
 
     // ---- auto-connect event (§5: quiet banner in-app, silent notification in background) ----
@@ -1840,7 +2446,7 @@ object AudioEngine {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             val n = android.app.Notification.Builder(ctx, "airbridge_auto")
-                .setContentTitle("声音接力 SoundRelay")
+                .setContentTitle("听说 LisTalk")
                 .setContentText(str(R.string.auto_connected_notif_text, text))
                 .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
                 .setContentIntent(pi)
@@ -1913,6 +2519,15 @@ object AudioEngine {
             // discovery channel that crosses routers between subnets
             driveSweep(nowMs)
 
+            // periodic paired probing (hardening §5.1): stored-IP
+            // attempts are no longer only event-driven — a paired PC
+            // that comes online later is retried every ~15 s, with the
+            // consent decision still inside onDeviceReappeared.
+            if (DiscoveryDiag.ProbeSchedule.isDue(lastPairedProbeMs, nowMs)) {
+                lastPairedProbeMs = nowMs
+                probePairedStoredIps(nowMs)
+            }
+
             // route-drift watchdog: re-pin if the OEM stack moved the
             // confirmed communication device away from our target.
             confirmOutputRoute()
@@ -1920,7 +2535,7 @@ object AudioEngine {
             // presence staleness edges (v2.1): a session whose beacons stop
             // becomes "absent" — the absence clock for the re-entry logic.
             for (s in sessions.values) {
-                if (s.wasPresent && s.lastBeaconMs > 0L && nowMs - s.lastBeaconMs > 3000) {
+                if (s.wasPresent && s.lastBeaconMs > 0L && nowMs - s.lastBeaconMs > PeerDirectory.FRESH_MS) {
                     s.wasPresent = false
                     s.absentSinceMs = s.lastBeaconMs
                     // absence edge (v2.2.3 FB-6): immediately aim a
@@ -2033,9 +2648,12 @@ object AudioEngine {
 
             // isolation verdict (v2.2 defect A): the PC is VISIBLE (fresh
             // beacons) yet repeated HELLOs go unanswered — that is not
-            // "not found", it is almost always router AP / guest-network
-            // isolation, and the status must say so. Suppressed while a
-            // pairing confirm is pending (the PC may be waiting on us).
+            // "not found". Hardening (F13): the status names BOTH causes
+            // (router isolation OR the PC's firewall / auto-reconnect
+            // setting) — the old text blamed the router alone, which was
+            // wrong whenever the PC firewall was at fault. Suppressed
+            // while a pairing confirm is pending (the PC may be waiting
+            // on us).
             var isolatedName: String? = null
             for (s in sessions.values) {
                 if (s.connected || s.pendingPairToken != null || codeSearch != null) continue
@@ -2086,10 +2704,32 @@ object AudioEngine {
                     it.remove()
                 }
             }
+            // discovery verdict (hardening §5.4): rule-based over the
+            // per-channel counters, so "nothing found" says WHY instead
+            // of spinning silently. Selection logic is the JVM-proven
+            // pure core (DiscoveryDiag.kt); wording lives in strings.xml.
+            val diagSnap = diag.snapshot()
+            val verdict = DiscoveryDiag.VerdictPolicy.select(
+                nowMs = nowMs, startedMs = engineStartedMs,
+                totalSent = diagSnap.totalSent, totalReceived = diagSnap.totalReceived,
+                hasPaired = registry.isNotEmpty(),
+                visibleUnreachable = isolatedName != null,
+                anyAutoPaused = sessions.values.any { it.autoPaused },
+                onLanNetwork = defaultNetworkIsLan(),
+                sweepGatedOff = false // the phone sweep has no UI gate (§5.5)
+            )
+            currentVerdict = verdict
             statusText = when {
-                isolatedName != null -> str(R.string.engine_status_isolated, isolatedName)
+                verdict == DiscoveryDiag.Verdict.VISIBLE_UNREACHABLE ->
+                    str(R.string.engine_status_isolated, isolatedName ?: "")
+                verdict == DiscoveryDiag.Verdict.WRONG_NETWORK ->
+                    str(R.string.engine_status_wrong_network)
+                verdict == DiscoveryDiag.Verdict.SEND_NO_RECEIVE ->
+                    str(R.string.engine_status_send_no_receive)
                 sessions.values.any { it.reResolving } -> str(R.string.engine_status_reconnecting)
                 connectedCount > 0 -> str(R.string.hero_connected_title, connectedCount)
+                verdict == DiscoveryDiag.Verdict.AUTO_PAUSED ->
+                    str(R.string.engine_status_auto_paused)
                 sessions.values.any { it.wantConnect } -> str(R.string.engine_status_connecting)
                 else -> str(R.string.status_searching_pc)
             }
@@ -2277,8 +2917,6 @@ object AudioEngine {
                     frame[i] = (frame[i] * 2.5).toInt().coerceIn(-32768, 32767).toShort()
                 }
             }
-            // Loop-guard history: the exact samples about to be sent.
-            loopGuard.pushSentMic(frame)
             val payload = ByteArray(frameSamples * 2)
             var sumSq = 0.0
             for (i in frame.indices) {
@@ -2289,12 +2927,20 @@ object AudioEngine {
             val rms = kotlin.math.sqrt(sumSq / frameSamples) / 32768.0
             val lvl = (rms * 3.0).toFloat().coerceIn(0f, 1f)
             micLevel = maxOf(lvl, micLevel * 0.72f)
-            // fan-out: same frame, per-session sequence numbers
-            for (s in targets) {
-                val addr = s.addr ?: continue
-                s.txSeq++
-                txPackets++
-                sendTo(Protocol.TYPE_AUDIO, payload, addr, seq = s.txSeq)
+            // Focus pause (§3.6): while a real call holds audio focus the
+            // capture chain keeps running locally, but NOTHING is sent —
+            // call audio must never leak to the PCs. The loop-guard
+            // history is likewise fed only with frames actually sent.
+            if (!focusPaused) {
+                // Loop-guard history: the exact samples about to be sent.
+                loopGuard.pushSentMic(frame)
+                // fan-out: same frame, per-session sequence numbers
+                for (s in targets) {
+                    val addr = s.addr ?: continue
+                    s.txSeq++
+                    txPackets++
+                    sendTo(Protocol.TYPE_AUDIO, payload, addr, seq = s.txSeq)
+                }
             }
         }
         releaseRecorder()
@@ -2314,10 +2960,19 @@ object AudioEngine {
                 if (minBuf <= 0) continue
                 val builder = AudioTrack.Builder()
                     .setAudioAttributes(AudioAttributes.Builder()
-                        // Voice-communication usage so the platform AEC gets
-                        // this playback as its reference signal (layer 1).
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                        // MEDIA usage (volume-stream fix): playback is the
+                        // system media stream, so the hardware volume keys,
+                        // the system panel and the in-app slider all drive
+                        // STREAM_MUSIC — the old VOICE_COMMUNICATION usage
+                        // pinned playback to the voice-call stream, where
+                        // the keys never reached it. NOTE (design §5): the
+                        // platform AEC's reference coupling may weaken on
+                        // some OEMs now that playback left the voice stream;
+                        // our NLMS reference tap is post-render and stream-
+                        // independent, but layer-1 ERLE must be re-verified
+                        // per device (real-device gate, not assumed).
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
                     .setAudioFormat(AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .setSampleRate(rate)
@@ -2370,6 +3025,12 @@ object AudioEngine {
                     shorts[i] = v.toShort()
                     i++
                 }
+                // Focus pause (§3.6): the frame was still popped — the
+                // jitter buffer keeps draining so nothing stale piles up
+                // during a call — but it is NOT mixed; the write path
+                // below renders silence, keeping the track fed and the
+                // NLMS reference timeline sample-continuous.
+                if (focusPaused) continue
                 // Loop-guard (defect 5c): if this frame is our OWN mic
                 // voice returned by the PC (contaminated capture source),
                 // drop it and surface the status note.
@@ -2441,8 +3102,8 @@ object AudioEngine {
                     continue
                 }
                 val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                val vol = am?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: -1
-                val volMax = am?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: -1
+                val vol = am?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: -1
+                val volMax = am?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: -1
                 val stateName = when (try { t.playState } catch (_: Exception) { -1 }) {
                     AudioTrack.PLAYSTATE_PLAYING -> str(R.string.track_state_playing)
                     AudioTrack.PLAYSTATE_PAUSED -> str(R.string.state_paused)
