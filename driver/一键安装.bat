@@ -154,34 +154,33 @@ rem ---------------------------------------------------------------------------
 :install_device
 echo [Step 4 of 4] Installing the virtual audio device...
 
-set "DEVCON="
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\Tools" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe"
-)
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\bin" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe"
-)
-if not defined DEVCON (
-  echo devcon.exe not found - staging the driver package only.
+rem --- the device node is created by devnode.exe, a small SetupAPI helper
+rem --- bundled in the driver package. It replaces the WDK devcon.exe,
+rem --- which user machines do not have - that is why this step used to
+rem --- stage the package and give up without creating any device.
+set "HELPER=%PKG%\devnode.exe"
+if not exist "%HELPER%" (
+  echo devnode.exe is missing from the driver package - staging the driver only.
   pnputil /add-driver "%INF%"
   echo.
-  echo ERROR: the WDK devcon tool is missing, so the device node could
-  echo not be created automatically. Reinstall the WDK, then run again.
+  echo ERROR: the bundled device helper (devnode.exe) is missing, so the
+  echo device node could not be created. Reinstall the driver package,
+  echo then run this file again.
   pause
   exit /b 1
 )
 
-"%DEVCON%" remove "%HWID%" >nul 2>&1
-"%DEVCON%" install "%INF%" "%HWID%"
+"%HELPER%" remove "%HWID%" >nul 2>&1
+"%HELPER%" install "%INF%" "%HWID%"
 if errorlevel 1 (
-  echo ERROR: device install failed. See the devcon output above.
+  echo ERROR: device install failed. See the devnode output above.
   pause
   exit /b 1
 )
 
 rem --- verify: device present AND its driver running ---
 set "STAT=%TEMP%\airbridge-devstatus.txt"
-"%DEVCON%" status "%HWID%" > "%STAT%" 2>&1
+"%HELPER%" status "%HWID%" > "%STAT%" 2>&1
 type "%STAT%"
 findstr /i /c:"Driver is running" "%STAT%" >nul
 if errorlevel 1 (
@@ -201,10 +200,10 @@ echo ================================================================
 echo  SUCCESS - all done, nothing else to do.
 echo.
 echo  Open:  Settings ^> System ^> Sound
-echo  Two NEW devices are now in the lists (names are in Chinese):
-echo    Output:  Speakers    ( SoundRelay Virtual Audio Device )
-echo    Input :  Microphone  ( SoundRelay Virtual Audio Device )
-echo  README.md shows the exact Chinese names - compare there.
+echo  Two NEW devices are now in the lists:
+echo    Output:  Speakers    ( AirBridge Wave Speaker )
+echo    Input :  Microphone  ( AirBridge Wave Microphone )
+echo  README.md shows where to find them - compare there.
 echo ================================================================
 pause
 exit /b 0

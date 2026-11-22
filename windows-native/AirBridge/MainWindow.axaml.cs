@@ -285,6 +285,7 @@ public partial class MainWindow : Window
         btnDisconnect.Click += (_, _) => DisconnectSession();
         btnStartService.Click += (_, _) => SetServiceRunning(true);
         btnGotoDiscover.Click += (_, _) => ShowPage(Page.Discover);
+        btnOpenDriverDir.Click += (_, _) => OpenDriverFolder();
         btnToggleService.Click += (_, _) => SetServiceRunning(!_engine.Running);
         btnPause.Click += (_, _) => TogglePause();
         SyncPauseLabels(); // B-03: labels mirror the persisted Paused from the start
@@ -478,7 +479,7 @@ public partial class MainWindow : Window
     {
         if (_selOutput is not null)
         {
-            tvOutBadge.Text = _selOutput.Score > 0 ? Loc.Tr("✓ 已自动识别虚拟声卡") : Loc.Tr("还没检测到虚拟声卡，其他软件将选不到手机麦克风（请安装听说虚拟音频设备或 VB-CABLE）");
+            tvOutBadge.Text = _selOutput.Score > 0 ? Loc.Tr("✓ 已自动识别虚拟声卡") : Loc.Tr("还没检测到虚拟声卡，其他软件将选不到手机麦克风（请安装声桥 AirBridge 虚拟音频驱动或 VB-CABLE）");
             tvOutBadge.Foreground = _selOutput.Score > 0 ? Accent : Warn;
         }
         if (_selInput is not null)
@@ -507,7 +508,7 @@ public partial class MainWindow : Window
         IBrush pillBg, pillFg;
         if (own)
         {
-            desc = Loc.Tr("已安装 · 扬声器 / 麦克风（听说 LisTalk 虚拟音频设备），其他软件可直接选用");
+            desc = Loc.Tr("已安装 · 声桥 AirBridge 虚拟音频设备（扬声器 AirBridge Wave Speaker / 麦克风 AirBridge Wave Microphone），其他软件可直接选用");
             pill = Loc.Tr("正常工作"); pillBg = AccentDim; pillFg = Accent;
         }
         else if (cable)
@@ -517,7 +518,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            desc = Loc.Tr("未检测到虚拟音频设备：请安装听说虚拟音频设备组件，或安装 VB-CABLE 作为备用");
+            desc = Loc.Tr("未检测到虚拟音频设备：请安装声桥 AirBridge 虚拟音频驱动组件，或安装 VB-CABLE 作为备用");
             pill = Loc.Tr("未安装"); pillBg = WarnDim; pillFg = Warn;
         }
         tvVdevDesc.Text = desc;
@@ -525,6 +526,25 @@ public partial class MainWindow : Window
         pillVdev.Background = pillBg;
         pillVdevText.Text = pill;
         pillVdevText.Foreground = pillFg;
+    }
+
+    /// <summary>Board item #1: the connect-page hint's action — open the
+    /// bundled driver folder so the user can re-run 一键安装.bat by hand
+    /// (the fix for "installed but no device ever appeared"). Falls back
+    /// to the app folder when the driver component was not installed.</summary>
+    private void OpenDriverFolder()
+    {
+        string dir = Path.Combine(AppContext.BaseDirectory, "driver");
+        try
+        {
+            if (!Directory.Exists(dir))
+            {
+                AppendLog(Loc.Tr("[驱动] 未找到随附的驱动文件夹（驱动组件未安装），打开程序目录代替"));
+                dir = AppContext.BaseDirectory;
+            }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dir) { UseShellExecute = true });
+        }
+        catch (Exception ex) { AppendLog($"[驱动] 打开驱动文件夹失败：{ex.Message}"); }
     }
 
     private void StartAudioFromSelection()
@@ -1119,6 +1139,27 @@ public partial class MainWindow : Window
             : _audio.RoutingWarning;
         tvLoopWarn.Text = loopMsg ?? "";
         bannerLoop.IsVisible = loopMsg is not null;
+
+        // board item #1: virtual-device hint on the device page. Only
+        // while connected, and the case follows where the mic channel
+        // actually renders (DeviceScoring.HintForOutput): no virtual
+        // device → the mic is audible on the real speakers but unusable
+        // by other apps, with the driver-folder action; VB-CABLE
+        // fallback → other apps must pick CABLE Output as their mic.
+        var vdevHint = _engine.Connected
+            ? DeviceScoring.HintForOutput(_selOutput?.Score)
+            : DeviceScoring.VdevHint.None;
+        bannerVdev.IsVisible = vdevHint != DeviceScoring.VdevHint.None;
+        if (vdevHint == DeviceScoring.VdevHint.NoVirtual)
+        {
+            tvVdevWarn.Text = Loc.Tr("未检测到虚拟音频设备：手机麦克风的声音正送到电脑的真实扬声器，其他软件用不了手机麦克风。打开驱动文件夹、重新运行一键安装.bat 装好虚拟音频驱动即可解决。");
+            btnOpenDriverDir.IsVisible = true;
+        }
+        else if (vdevHint == DeviceScoring.VdevHint.CableFallback)
+        {
+            tvVdevWarn.Text = Loc.Tr("手机麦克风正经 VB-CABLE 转发（备用方案）：其他软件要用手机麦克风，必须在麦克风列表里选 CABLE Output。");
+            btnOpenDriverDir.IsVisible = false;
+        }
 
         // unified-versioning mismatch: loud banner + settings pill, audio keeps running
         if (_engine.VersionMismatch)

@@ -13,7 +13,7 @@ set "PFXPASS=AirBridge-Test-2026"
 set "SLN=%~dp0src\SimpleAudioSample\SimpleAudioSample.sln"
 set "OUT=%~dp0build-output"
 
-echo [1/5] Locating Visual Studio 2022 ...
+echo [1/6] Locating Visual Studio 2022 ...
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "VSINSTALL="
 if exist "%VSWHERE%" (
@@ -28,7 +28,7 @@ echo     VS: %VSINSTALL%
 set "MSBUILD=%VSINSTALL%\MSBuild\Current\Bin\MSBuild.exe"
 if not exist "%MSBUILD%" ( echo ERROR: MSBuild.exe not found. & goto :fail )
 
-echo [2/5] Locating Windows Kit tools (signtool / inf2cat) ...
+echo [2/6] Locating Windows Kit tools (signtool / inf2cat) ...
 set "KITBIN=%ProgramFiles(x86)%\Windows Kits\10\bin"
 set "SIGNTOOL=" & set "INF2CAT="
 for /f "delims=" %%d in ('dir /b /ad /o-n "%KITBIN%" 2^>nul') do (
@@ -40,11 +40,11 @@ if not defined INF2CAT  ( echo ERROR: inf2cat.exe not found - is the WDK install
 echo     signtool: %SIGNTOOL%
 echo     inf2cat : %INF2CAT%
 
-echo [3/5] Building Release x64 ...
+echo [3/6] Building Release x64 ...
 "%MSBUILD%" "%SLN%" /t:Rebuild /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal
 if errorlevel 1 ( echo ERROR: build failed. See output above. & goto :fail )
 
-echo [4/5] Locating built driver package ...
+echo [4/6] Locating built driver package ...
 set "PKGDIR="
 for /r "%~dp0src\SimpleAudioSample" %%f in (SimpleAudioSample.inf) do (
   echo %%f | findstr /i "\\x64\\Release\\" >nul && set "PKGDIR=%%~dpf"
@@ -57,7 +57,17 @@ if not defined PKGDIR (
 echo     package: %PKGDIR%
 if not exist "%PKGDIR%simpleaudiosample.sys" ( echo ERROR: .sys missing in package dir. & goto :fail )
 
-echo [5/5] Test-signing .sys and catalog ...
+echo [5/6] Building devnode.exe helper ...
+rem The installer creates the device node with this helper instead of the
+rem WDK-only devcon.exe, which user machines do not have. A package without
+rem it cannot install the device there, so a failed compile fails the build.
+call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64
+if errorlevel 1 ( echo ERROR: VsDevCmd.bat failed. & goto :fail )
+cl /nologo /O2 /W4 /EHsc /MT /DUNICODE /D_UNICODE "%~dp0devnode\devnode.cpp" /Fe:"%~dp0devnode\devnode.exe" /Fo:"%~dp0devnode\devnode.obj"
+if errorlevel 1 ( echo ERROR: devnode.exe compile failed. & goto :fail )
+if not exist "%~dp0devnode\devnode.exe" ( echo ERROR: devnode.exe was not produced. & goto :fail )
+
+echo [6/6] Test-signing .sys and catalog ...
 "%SIGNTOOL%" sign /f "%PFX%" /p "%PFXPASS%" /fd sha256 "%PKGDIR%simpleaudiosample.sys"
 if errorlevel 1 ( echo ERROR: signing .sys failed. & goto :fail )
 "%INF2CAT%" /driver:"%PKGDIR%" /os:10_X64
@@ -70,6 +80,7 @@ mkdir "%OUT%"
 copy /y "%PKGDIR%SimpleAudioSample.inf" "%OUT%\" >nul
 copy /y "%PKGDIR%simpleaudiosample.sys" "%OUT%\" >nul
 copy /y "%PKGDIR%SimpleAudioSample.cat" "%OUT%\" >nul
+copy /y "%~dp0devnode\devnode.exe" "%OUT%\" >nul
 
 echo.
 echo SUCCESS. Signed package is in:

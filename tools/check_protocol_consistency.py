@@ -287,7 +287,7 @@ def main():
         ok("AudioEngine live path wired: echoProcessor.processCapture/pushPlayback + loopGuard.checkIncoming/pushSentMic")
     else:
         fail(f"AudioEngine live-path wiring incomplete: {wiring}")
-    for side, fname in [("android", "LisTalk-Android-v2.3.0.apk"), ("windows", "LisTalk-Setup-v2.3.0.exe")]:
+    for side, fname in [("android", "LisTalk-Android-v2.3.1.apk"), ("windows", "LisTalk-Setup-v2.3.1.exe")]:
         fpath = os.path.join(ROOT, "releases", fname)
         entry = rel_manifest.get(side, {})
         if not os.path.exists(fpath):

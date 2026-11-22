@@ -20,18 +20,14 @@ set "HWID=ROOT\SimpleAudioSample"
 echo === SoundRelay virtual audio driver uninstall ===
 echo.
 echo [1/3] Removing device node ...
-set "DEVCON="
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\Tools" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe"
-)
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\bin" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe"
-)
-if defined DEVCON (
-  "%DEVCON%" remove "%HWID%"
+rem --- device removal uses the bundled devnode.exe helper (build-output),
+rem --- not the WDK devcon.exe, which user machines do not have.
+set "HELPER=%~dp0build-output\devnode.exe"
+if exist "%HELPER%" (
+  "%HELPER%" remove "%HWID%"
 ) else (
-  echo devcon not found - remove the device in Device Manager instead:
-  echo   Sound, video and game controllers ^> SoundRelay device ^> Uninstall device.
+  echo devnode.exe not found - remove the device in Device Manager instead:
+  echo   Sound, video and game controllers ^> the AirBridge device ^> Uninstall device.
 )
 
 echo [2/3] Removing driver package from the driver store ...

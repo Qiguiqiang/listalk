@@ -24,7 +24,7 @@
 2. 检测 Secure Boot：`nsExec` 调 PowerShell `Confirm-SecureBootUEFI`；为 `True` 时弹 MessageBox 说明「需先在 BIOS 关闭 Secure Boot，本次跳过驱动安装，主程序不受影响」，**跳过本组件剩余步骤、不中断整个安装**。
 3. 导入证书：`certutil -addstore -f Root` 与 `-f TrustedPublisher`（`nsExec::ExecToLog`，检查返回码，失败则提示并跳过）。
 4. 开测试模式：`bcdedit /set testsigning on`（同上检查返回码）。
-5. 写续装：注册表 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce` 值名 `AirBridgeDriverSetup`，值 `"$INSTDIR\driver\一键安装.bat"`。续装脚本会认出「证书已导入、测试模式已开」，直接进入 devcon 装设备 + 验活并在成功后自删该 RunOnce 值。
+5. 写续装：注册表 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce` 值名 `AirBridgeDriverSetup`，值 `"$INSTDIR\driver\一键安装.bat"`。续装脚本会认出「证书已导入、测试模式已开」，直接进入装设备 + 验活并在成功后自删该 RunOnce 值。装设备用随包的 `devnode.exe`（SetupAPI 小工具，源码 `driver/devnode/`，随驱动包构建产出到 `build-output\`）——不再依赖 WDK 的 devcon.exe（用户机器上没有，正是此前「装了却没有设备」的根因）。
 6. 结尾页提供重启选项（NSIS `Reboot` / 自定义结尾页单选「现在重启」默认选中）：文案注明「重启后驱动安装会自动继续，登录后请点掉一次 UAC 提示」。
 
 > 注：主安装程序本身以管理员权限运行时，第 3–5 步无需再提权；续装在下次登录时由 RunOnce 触发，`一键安装.bat` 自带提权逻辑。

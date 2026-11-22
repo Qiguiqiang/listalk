@@ -133,7 +133,9 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="0"/>
-    <Setter Property="Foreground" Value="{StaticResource Text2}"/>
+    <!-- Text1, not Text2: #9AA7B8 on the near-black title bar was too
+         faint to read the glyphs at a glance (board item #1). -->
+    <Setter Property="Foreground" Value="{StaticResource Text1}"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
   </Style>

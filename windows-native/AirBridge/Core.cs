@@ -336,4 +336,16 @@ public static class DeviceScoring
         if (n.Contains("voicemeeter")) score = Math.Max(score, 75);
         return score;
     }
+
+    /// <summary>Connect-page virtual-device hint (board item #1), decided
+    /// by where the phone-mic channel actually renders (the selected
+    /// output's score): None = own driver — nothing to warn about;
+    /// NoVirtual = a real speaker (or no selection): other apps cannot
+    /// pick up the phone mic at all; CableFallback = a third-party cable
+    /// (VB-CABLE) — other apps hear the phone only by selecting the
+    /// cable's capture twin (CABLE Output) as their microphone.</summary>
+    public enum VdevHint { None, NoVirtual, CableFallback }
+    public static VdevHint HintForOutput(int? outputScore) =>
+        outputScore is null or 0 ? VdevHint.NoVirtual :
+        outputScore.Value >= 110 ? VdevHint.None : VdevHint.CableFallback;
 }

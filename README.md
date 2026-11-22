@@ -1,86 +1,235 @@
-**English** | [简体中文](README.zh-CN.md)
-
 # 听说 LisTalk
 
-## Let audio and video relay freely between your PC, phone, and earbuds.
+**让影音在电脑、手机和耳机之间自由接力。** Audio and video, relayed freely between your PC, phone and earbuds.
 
-**Share your PC's sound to your phone and earbuds, and your phone's microphone to your PC — over WiFi or Bluetooth.**
+手机麦克风 → 电脑（微信 / Zoom / OBS / 游戏里当麦克风用）；电脑声音 → 手机扬声器播放。
+双向同时进行（全双工，带回声抑制），极低延迟，强自适应。**一台手机可同时连多台电脑**：
+麦克风扇出到所有电脑，多台电脑的声音在手机端混音播放。配对过的电脑一出现在同一
+网络就**自动连接、自动开始推流**，不用点。
 
-LisTalk turns your phone into a wireless microphone and a wireless speaker for your computer: an Android phone on one end, a PC on the other, an app on each — and the two can "borrow" each other's sound. Audio from your PC can play on your phone, and relay onward from the phone into your earbuds. Speak into your phone, and your voice shows up at your PC's microphone input, ready to use in meetings, streaming, and recording apps.
-
----
-
-## What it does
-
-### 1. Your phone as a wireless microphone for your PC
-
-No need to stay at your desk for meetings, live streams, or recorded lessons: keep the phone in your pocket and walk around while you talk — your voice reaches the PC in real time. Just select the phone microphone in Tencent Meeting / Zoom / OBS (on Windows it goes through a virtual audio device, see below).
-
-### 2. PC audio on your phone's speaker
-
-The PC is playing a video or music in the study, and you can listen from the living room on your phone. At night, route the sound to your phone and keep the volume in your own hands so you don't disturb anyone else.
-
-### 3. Any earbuds become wireless earbuds for your PC ⭐
-
-Earbuds connect to the phone, the phone connects to the PC — and PC audio relays through the phone into your ears. **Whether your earbuds are Bluetooth or wired, and whether or not your PC has Bluetooth, they work as wireless earbuds for your PC.** The earbuds' microphone works in the other direction too, as the PC's mic: walk around the room in a meeting, with both directions covered.
-
-### 4. One phone, several PCs at once
-
-Your phone's microphone can fan out to several PCs at the same time (a desktop and a laptop both in meetings, say), and audio from several PCs can be mixed back into the phone so you hear them together — each PC with its own volume and its own mute switch.
+平台：Android 手机端（原生框架，无 AndroidX）+ Windows 电脑端（原生
+.NET/Avalonia 应用，源码 `windows-native/`，安装包自带自有品牌虚拟音频
+驱动组件，VB-CABLE 仅作兜底）。`pc/` 下的 Python 版是 v1 工件，仅作协议
+参考与 Linux 工具，不再随现行安装包分发。协议细节见 [PROTOCOL.md](PROTOCOL.md)，
+UI 规格见 [ui-design/UI_SPEC.md](ui-design/UI_SPEC.md) 与
+[ui-design/UI_SPEC_MULTIDEVICE.md](ui-design/UI_SPEC_MULTIDEVICE.md)。
 
 ---
 
-## Features
+## 架构
 
-- **Low latency**: a custom UDP protocol streaming raw PCM in 10 ms frames; target latency under 50 ms over WiFi and under 30 ms over USB
-- **Adaptive**: the jitter buffer auto-adjusts between 20–60 ms based on network quality; when packet loss climbs, the sample rate steps down automatically (48k → 24k → 16k) to stay smooth, and steps back up when the network recovers
-- **Echo cancellation**: talk while your phone plays PC audio out loud, with nothing feeding back — platform AEC + an in-house NLMS canceller running in real time + double-talk protection (your voice is never suppressed while you're speaking) + a howling guard, several layers working together
-- **AirDrop-style discovery**: tap "Pair a new PC" and nearby devices pop up in a list automatically; tap one to pair. LAN broadcast, mDNS, and BLE proximity run in parallel — QR codes and pairing codes are only a fallback
-- **Mesh roaming auto-reconnect**: when your phone roams between Mesh WiFi nodes and its IP address changes, streaming re-targets by device identity and resumes on its own — no manual reconnect
-- **Multiple transports (roadmap)**: the relay doesn't care which link carries it — WiFi and USB (tethering / adb forwarding) work today; direct phone↔PC **Bluetooth** audio and pure USB-cable connections are in development. The protocol itself is transport-agnostic: whichever link connects is the one it uses
-- **Paired devices are remembered**: return to a paired environment and devices are discovered automatically, then connected according to your setting (ask every time / always automatically / never automatically)
-- **Runs in the background on both ends**: the PC app lives in the system tray and can start at boot; the phone runs a foreground service, so streaming continues with the screen off
-- **In-app updates**: both ends are released together, always at the same version; the apps check for updates against the built-in update address and verify downloads with SHA-256 — anything that fails verification is refused
-- **Own-brand virtual audio driver (Windows, optional)**: once installed, Windows sound settings show "Speakers / Microphone (听说 LisTalk Virtual Audio Device)" — no more borrowing a third-party virtual sound card. Currently a **test-signed** build: it requires Windows test mode to be enabled and Secure Boot to be off, so it is for personal use only; see [driver/README.md](driver/README.md) for the limitations
+```
+        手机（听说 App）                              电脑（每台各跑一个 PC 端）
+ ┌────────────────────────┐   UDP 47731   ┌──────────────────────────────┐
+ │ 麦克风 ─┬─ 扇出 ────────┼──────────────▶│ 播放到虚拟声卡输入端          │
+ │         ├─▶ PC-1        │  10ms PCM 帧  │  (VB-CABLE Input / Linux 虚拟汇)│
+ │         └─▶ PC-2        │               │   └→ 其他应用把它当麦克风录音  │
+ │ 扬声器 ◀─ 混音（求和+钳位）│◀─────────────┤ 采集虚拟声卡监听端/系统声音    │
+ │ 前台服务：存在监听+会话   │  信标 1次/秒   │ 信标广播 deviceId+令牌哈希     │
+ └────────────────────────┘               └──────────────────────────────┘
+```
 
-## Quick start
+- 传输：UDP，10 ms 一帧；发现信标、握手、保活、音频共用 47731 一个端口。
+  同一协议走 WiFi 局域网、USB 网络共享、`adb forward udp:47731 udp:47731`，无第二套代码路径。
+- 编码 v1：裸 PCM16 / 48 kHz 单声道（480 采样 = 960 字节 + 16 字节头），编解码延迟 <1 ms；
+  协议头已预留 Opus 协商位（v2）。
+- 延迟预算（设计目标，未在真机实测）：帧 10 ms + 抖动缓冲 20–60 ms 自适应 + 系统音频缓冲，
+  目标整链路 **USB < 30 ms、WiFi < 50 ms** 量级；App 内延迟徽章显示的是实测 RTT。
 
-1. **Download** the latest version from [Releases](https://github.com/Qiguiqiang/listalk/releases)
-   - Android: `LisTalk-Android-v2.3.0.apk` (allow "Install unknown apps" when installing)
-   - Windows: the `LisTalk-Setup-v2.3.0.exe` installer (not code-signed yet; on first run Windows shows a SmartScreen prompt — choose "More info → Run anyway")
-   - Linux: use the Python version in `pc/` (see the scripts under [pc/](pc/))
-2. Connect the phone and the PC to the **same WiFi** (or use a USB cable with adb forwarding), and open the app on both ends
-3. On the phone, tap "Pair a new PC", pick your computer from the nearby list, and confirm the verification code shown on both ends matches
-4. In your meeting or streaming app on the PC, select LisTalk's virtual device as the microphone (or VB-CABLE), and do the same for the speaker; on the phone, you can choose whether sound comes out of the speaker, the earpiece, or your earbuds
+## 多台电脑（v1 已实现）
 
-Optional driver: to use LisTalk's own virtual audio device instead of VB-CABLE, follow [driver/README.md](driver/README.md) (you'll need a Windows machine with VS2022 + WDK to build it once).
+- 手机为每台电脑维护独立会话（独立序号、抖动缓冲、延迟/丢包统计）。
+- **扇出**：同一帧麦克风音频发给所有「麦克风发送」开着的已连接电脑。
+- **混音**：每台电脑的声音按各自音量（卡上滑杆，默认 70%）/静音混合，求和后硬钳位
+  到 int16 防爆音，再从手机扬声器播放。
+- 每张设备卡独立控制：自动连接开关、麦克风发送、扬声器接收、音量、静音、
+  连接/停止；长按卡片可重命名 / 查看配对信息 / 忘记这台电脑。
+- 采样率自适应是全局的：一路采集管线只有一个采样率，由**最差的那条链路**决定升降。
 
-## Building from source
+## 配对与自动激活
 
-Repository layout:
+- **信标存在感应**：PC 端每秒广播一次信标（设备 ID + 令牌哈希）。手机前台服务常驻监听；
+  已配对且「自动连接」开着的电脑一被听见，1–3 秒内自动连接并按上次的开关状态开始推流，
+  全程不用点。App 在前台时顶部出一条可撤销的横条；在后台时只发一条静默低优先级通知。
+- **配对方式**（任选其一，配一次永久记住，注册表存在手机本地）：
+  1. **扫码**：PC 端点「显示配对二维码」，手机扫一下（camera2 + ZXing，纯框架实现）。
+  2. **6 位配对码**：PC 屏幕显示（10 分钟轮换），手机在「输入配对码」里输满 6 位自动查找。
+  3. **首次免码**：PC 端还没有配过任何手机且刚启动 120 秒内，手机点新设备卡片即可配对。
+- **验证码核对**：配对最后一道闸——手机确认屏与电脑屏幕同时显示一个 6 位验证码，
+  一致才点「确认配对」，防止配错/被蹭。
+- 自动连接失败有熔断：连续 3 个 10 秒周期握不上手就暂停自动重试（卡片点按可重试），不死循环耗电。
+- 诚实说明：**BLE 只是已设计、未实现的下一层**（见 PROTOCOL.md 末节）——PC 端 BLE 广播
+  跨 Windows/Linux 不可移植，v1 的感应栈 = 局域网信标 + 配对注册表 + 历史 IP 重连 + 扫码/配对码，
+  已覆盖同房间场景。
 
-| Directory | Contents |
-|---|---|
-| `app/` | Android app source (Kotlin, plain framework APIs, no AndroidX) |
-| `windows-native/` | Native Windows app (C# / Avalonia) |
-| `pc/` | Python implementation for Linux / early Windows (currently what Linux uses) |
-| `driver/` | Own-brand virtual audio driver (renamed from Microsoft's official SimpleAudioSample, test-signed) |
-| `ui-design/` | UI specs and high-fidelity previews |
-| `tools/` | Protocol consistency checks and JVM tests |
-| `docs/` | Architecture and protocol summary (the full protocol is in `PROTOCOL.md` at the repo root) |
+## 回声抑制（全双工三层）
 
-- **Android**: no Gradle — a hand-written build script, `build-android.sh` (aapt2 → kotlinc → d8 → apksigner). Requires JDK 17, the Android SDK (platform 34 / build-tools 34.0.0), and the Kotlin compiler; adjust the paths in the script to your local environment.
-- **Windows**: build with the .NET 8 SDK from `windows-native/AirBridge/AirBridge.csproj`; package the installer with NSIS using `installer.nsi` at the repo root (publish a self-contained single file first).
-- **Driver**: VS2022 + WDK; build, sign, and install with the one-click script described in [driver/README.md](driver/README.md) (test-signed).
+手机一边外放电脑声音、一边用麦克风给电脑送音，最怕外放声被麦克风收回去形成回声甚至啸叫。
+听说用三层防线，UI 的「回声抑制」开关默认开，状态行实时显示当前档位：
 
-## Project status
+1. **系统 AEC 优先**：录音源 `VOICE_COMMUNICATION`，并给录音会话挂
+   `AcousticEchoCanceler` + `NoiseSuppressor` + `AutomaticGainControl`（逐个查
+   `isAvailable()`，实际挂上哪个就显示哪个）；播放走 `USAGE_VOICE_COMMUNICATION`
+   的 AudioTrack + 通话音频模式 + 扬声器路由，让系统 AEC 拿到播放参考信号。
+   状态显示「系统AEC已启用」。
+2. **参考信号兜底（自研，轻量）**：我们确切知道自己播了什么——播放的混音帧带时间戳
+   存入参考缓冲（约 400 ms）。采集侧把每帧麦克风与参考做多延迟（0–50 ms）归一化相关：
+   相关性 > 0.5 且播放声量可观 ⇒ 判定有残留回声，快速压低麦克风发送增益（约 −12 dB），
+   回声消失后缓慢释放，不切真实语音。状态显示「降级模式（自动压低麦克风）」。
+3. **啸叫守卫（常开，与开关无关）**：麦克风持续高能量且与播放高度相关（>0.8 持续 300 ms）
+   判定为反馈啸叫，发送增益逐级 −3 dB（下限 −18 dB），清除后每 2 秒回升 1 dB。
+   绝不让失控回路持续。
 
-A personal open-source project, **under active development**. Current version: v2.3.0. The core pipeline — two-way streaming, echo cancellation, automatic discovery, multiple devices, in-app updates — is complete and covered by local automated tests. Sound quality, audio routing on different phone brands, and roaming behavior across different Mesh routers are still being tested and refined on real devices — reports of your phone model and what you observe are welcome in Issues.
+**诚实的上限**：硬件 AEC 质量因手机而异（旗舰机通常很好，个别机型 AEC 形同虚设）；
+最差情况下兜底就是第 2 层的压低——能保不回灌、不啸叫，但大声外放时说话会被短暂压低。
+PC 侧镜像说明：若电脑用音箱外放、又选了电脑自己的麦克风当输入，那是电脑自身的声学
+回路，在电脑系统/应用里处理，不在本桥范围内。
 
-PRs are welcome, too: please keep the protocol simple (one phone to many PCs, a single UDP channel). If you change the protocol, read `PROTOCOL.md` first and run `tools/check_protocol_consistency.py`.
+**全双工测试法**：连上后在电脑上放音乐（会从手机扬声器大声播出），同时对着手机说话——
+电脑端录到的应只有人声，音乐不应回灌成回声；把手机音量开到最大贴近电脑音箱也应无啸叫。
 
-## License
+## 自适应清单
 
-[Apache License 2.0](LICENSE) © 2026 Gray
+- 采样率：丢包 >5% 或抖动 >15 ms ⇒ 48k→24k→16k 逐级降；全链路干净约 30 秒 ⇒ 逐级升回。
+- 抖动缓冲：每会话独立，按实测抖动在 20–60 ms 间自适应；缺帧静音 conceal 并计入丢包。
+- 设备路由（PC）：按名字自动识别虚拟声卡并优先（VB-CABLE / BlackHole / PulseAudio monitor /
+  立体声混音 / WASAPI loopback 线索 / 本桥 Linux 虚拟设备），否则用系统默认设备。
+- 发现/重连：信标 + 广播发现双通道，手动 IP 兜底；断线 5 秒判定、自动重连、自动恢复推流。
+- 电平与状态全程可见：手机端分段电平表（真实音频电平驱动）、每卡延迟徽章按
+  <30 ms 流畅 / 30–80 ms 一般 / >80 ms 偏高变色；PC 端有延迟曲线（近 60 秒）。
 
-Free to use, modify, and distribute — just keep the license and copyright notices.
+---
+
+## 快速开始
+
+到 GitHub Releases 下载最新版两端安装包（`LisTalk-Android-v<版本>.apk` +
+`LisTalk-Setup-v<版本>.exe`）。
+
+### 手机端
+
+安装 APK，打开「听说 LisTalk」，授予麦克风（扫码配对再加相机）权限，
+点「开始搜索」。
+
+### 电脑端 · Windows
+
+1. 运行 `LisTalk-Setup-v<版本>.exe` 安装原生版（.NET/Avalonia，无需 Python）。
+2. 安装包自带**自有品牌虚拟音频驱动组件**（可选勾选）：装上后微信/Zoom/OBS/游戏
+   的麦克风列表里会出现「听说 LisTalk 虚拟麦克风」。当前驱动为测试签名版，
+   安装需要开启 Windows 测试模式并关闭 Secure Boot，细节见安装时的引导。
+   不装驱动组件也能跑：App 会自动回退到 VB-CABLE（若已装）或系统默认设备，
+   只是其他应用选不到手机麦克风。
+3. 打开「听说 LisTalk」，保持窗口在设备页即可被手机发现。
+
+### 电脑端 · Linux
+
+现行产品只有 Windows 原生版。`pc/` 下的 Python 版是 v1 工件（协议参考与
+Linux 工具），启动方式见 `pc/start_linux.sh` 与 `pc/setup_linux_virtual.sh`，
+不再随现行安装包分发。
+
+### 连接与测试
+
+1. 两边连同一 WiFi（跨网段亦可：v2.2.3 起发现支持互通子网单播扫描，见设置里
+   的「跨网段发现」）或 USB 网络共享 / `adb forward udp:47731 udp:47731`。
+2. PC 端先开（设备页显示配对码与二维码）。
+3. 手机点「开始搜索」→ 已配对电脑自动连上；新电脑出现在「新设备」区，点「配对」扫码
+   或输 6 位码 → 核对验证码 → 确认配对。
+4. 测试一（手机当麦）：对手机说话，电脑端窗口麦克风电平条应跳动；在任意录音软件里
+   选「听说 LisTalk 虚拟麦克风」（未装驱动组件时选 CABLE Output）应能录到
+   手机的声音。
+5. 测试二（电脑声音回手机）：电脑上播放音乐，手机扬声器应播出；多台电脑同时播
+   会在手机端混音。
+6. 全双工回声测试见上文「回声抑制」一节。
+
+### PC 端命令行（v1 Python 版，仅协议参考）
+
+```
+python phone_audio_pc.py                 # 控制台模式，自动选设备
+python phone_audio_pc.py --gui           # 状态窗（设备下拉/延迟曲线/配对码/二维码）
+python phone_audio_pc.py --list-devices  # 列设备及虚拟设备评分
+python phone_audio_pc.py --output-device 12 --input-device 9 --save-config
+```
+
+配置文件 `pc/phone_audio_pc.json` 自动生成：设备索引、本机 deviceId、配对令牌、
+6 位配对码、已配对手机注册表。删掉它 = 恢复出厂（所有配对失效）。
+
+---
+
+## 构建手机端（无 Gradle 手工路线）
+
+```bash
+./build-manual.sh   # aapt2 -> kotlinc(JDK17, 仅框架+ZXing core jar) -> d8 -> zipalign -> apksigner
+```
+ZXing core 3.5.3 jar 在 `app/libs/`（纯 Java，无原生依赖，扫码解码用）。
+
+## 已知限制 / 诚实清单
+
+- **本 APK 只通过了构建与静态校验（验签、badging、dex 检查），尚未在真机运行过**；
+  延迟数字、AEC 效果、扫码成功率都需要在真机上验证，本 README 的延迟是设计预算不是实测值。
+- 「已连接待机」与「推流中」在 v1 引擎里是同一状态（连上即按开关推流），UI 未做假的待机档。
+- 配对令牌在配对成功的 HELLO_ACK 里经局域网明文传一次（v1 取舍）；令牌哈希用于日常鉴权。
+- 电脑端同一时刻服务一部手机（多部手机连同一台 PC 不在 v1 范围；多台 PC 连一部手机可以）。
+- UI_SPEC_MULTIDEVICE.md 文件在交付时截断于 §5 中段，§6 之后的文案/验收表未拿到，
+  已按 §0–§5 与 v1 规格实现，个别细节（如卡片重排动画）做了简化。
+
+## v2 路线图
+
+- Opus 编码（协议头已预留）：带宽降一个量级，弱网更稳。
+- BLE 存在感应层（协议已设计）：PC 广播 deviceId，手机听见先醒、再等 LAN 信标确认。
+- Windows 原生虚拟声卡驱动评估（免装 VB-CABLE）；Linux 侧 PipeWire 原生节点（pw-cli）直连。
+- 真机延迟实测与 AEC 效果矩阵（多机型）后调兜底阈值；混音增益自动归一化（防多源叠加爆音的人声优先）。
+
+---
+
+## v2.0.0（统一版本，两端同版本发布）
+
+- 根因与修复：见 [FIXLOG-v2.md](FIXLOG-v2.md)；自测与真机复测清单：见 [TEST-REPORT-v2.md](TEST-REPORT-v2.md)。
+- Windows 端为原生应用（.NET/Avalonia，源码 `windows-native/`），安装包 `AirBridge-Setup-v2.exe`（Publisher Gray）；Python 版仅作协议参考与 Linux 工具。
+- **在线更新托管布局**：更新清单固定托管在 GitHub 仓库根目录 `update.json`
+  （`https://raw.githubusercontent.com/Qiguiqiang/listalk/main/update.json`），
+  安装包托管在 GitHub Releases。两端 App 内置该地址（设置里不可改，FB-10 产品
+  决策），只读 update.json 并下载其中 url 指向的二进制，下载后先验 SHA-256、
+  不符绝不安装。发布资产名为 `LisTalk-Android-v<版本>.apk` 与
+  `LisTalk-Setup-v<版本>.exe`；update.json 必须等两个资产都已上传到 Release
+  后才切换指向新版本。一次发布 = 一个版本号、两端条目齐全，绝不只发一端。
+
+## v2.1.0（统一版本，两端同版本发布）
+
+- 自测与真机复测清单：见 [TEST-REPORT-v2.1.md](TEST-REPORT-v2.1.md)。发布物：
+  `PhoneAudioBridge-v2.1-debug.apk` + `AirBridge-Setup-v2.1.exe`（`releases/` 同步更新，
+  含一个简单的 `index.html` 下载页）。
+- **回声链全线接通（实时链路）**：平台 AEC → 自研 NLMS（参考信号取自最终混音渲染帧）
+  → 双讲感知残余抑制（只按估计残余回声定深、封顶）→ 啸叫保护；状态行显示真实生效层。
+- **音频设备继承系统能力**：设置里可按真实设备名选输出/输入（本机扬声器/听筒/蓝牙或
+  有线耳机/耳机麦），插拔实时刷新；中途插入耳机有横条提示一键切换；输出到耳机时
+  自动进入「耳机模式 · 回声风险低」（抑制放松）。会话内音频配置一次钉死（模式/路由/
+  设备采样率 48k 不变），自适应采样率带迟滞、只在静音边界切换——不再有"音色突变"。
+- **麦克风**：模式三档（语音通话/高清拾音/自动，会话边界生效）；多内置麦时优选底部
+  主麦并朝向用户，状态区显示实际路由麦克风；采集链带 ~100Hz 高通，滤桌面传导的
+  拍击/震动低频。说明：没有公开的厂商（小米等）API 能给第三方 App 解锁特殊"最佳
+  麦克风"，系统级多麦算法只留给系统 App——源选择/优选设备/方向/处理链是全部合法手段。
+- **自身声音零回放（三重防护）**：①手机混音只含网络下行帧，本地麦克风帧从不进混音
+  （含 AEC 参考抽头，只读不回灌）；②电脑端采集源与麦克风渲染设备冲突（同一条
+  VB-CABLE 两端、或麦克风设备的环回）会被警告并阻止发送，自动选择也会避开；
+  ③手机端与电脑端各有相关检测守卫：检出自身声音被回传即丢弃/暂停并给出状态提示。
+- **设置屏（全部真实生效）**：重连三档（每次询问/总是自动/从不自动，短暂掉线 <60 秒
+  始终自动续连）、离开 >10 分钟回归询问（横条+通知按钮）、后台运行开关与电池白名单
+  引导、回声抑制开关与层状态、通知开关、麦克风灵敏度（标准/高灵敏）与降噪档位、
+  麦克风模式、输出/输入设备、检查更新与更新地址。通知带暂停/继续/断开按钮。
+- **发现与配对**：「配对新电脑」打开附近设备 sheet（LAN 信标 + mDNS + BLE 三路合并、
+  按设备去重、已配对置顶、5 秒过期），点设备→核对码确认→完成配对；扫码为次选，
+  配对码/手动 IP 在「其他方式」里。配对码查找除广播外还会单播扇出到已发现/最近
+  连接过的 IP（修复广播被丢时配对码全灭的问题，C3）。
+- **Windows 桌面布局**：主窗口改横向桌面布局（左侧状态栏 + 主内容区，1160×680，
+  最小 940×580，可缩放）。
+- **驱动组件位**：安装包组件页含「听说虚拟音频设备驱动（测试签名）」——本包未包含
+  驱动二进制（须在 Windows VS2022+WDK 机器上产出 `driver/build-output\`），故组件
+  置灰并在说明中注明，绝不让用户勾选一个没有驱动文件的组件；驱动就绪后按
+  `driver/INTEGRATION-IN-SETUP.md` 并入（v2.2）。PC 端已能识别听说自有设备并优先
+  选用，未装时自动回退 VB-CABLE。
+- **更新验证（本地托管实测）**：`releases/` 可由任意静态服务器托管；本次已用
+  `python http.server` 在本机托管该目录，并用两个 harness 跑通**出货代码**：
+  Android 检查器（`tools/update-harness-android/`）经真实 HTTP 取清单、下载 APK、
+  SHA-256 校验通过/错哈希拒绝；Windows 检查器（`tools/update-harness/`）的清单解析、
+  版本比较、SHA-256 校验、环路检测与路由冲突判定全部通过（其 HTTP 取数在沙箱内被
+  网络过滤拦截 .NET 连接，已用最小复现证明为沙箱限制，非代码问题）。公网托管上线
+  只是把两端设置里的更新地址指过去，无需改代码。

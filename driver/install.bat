@@ -75,38 +75,34 @@ if not exist "%PKG%\SimpleAudioSample.inf" (
 certutil -addstore -f Root "%CER%" >nul
 certutil -addstore -f TrustedPublisher "%CER%" >nul
 
-rem --- locate devcon (ships with the WDK) ---
-set "DEVCON="
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\Tools" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\Tools\%%d\x64\devcon.exe"
-)
-for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\bin" 2^>nul') do (
-  if not defined DEVCON if exist "%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe" set "DEVCON=%ProgramFiles(x86)%\Windows Kits\10\bin\%%d\x64\devcon.exe"
-)
-if not defined DEVCON (
-  echo devcon.exe not found in the Windows Kit folders.
-  echo Staging the package with pnputil only - the device node still needs devcon:
+rem --- the device node is created by devnode.exe, a small SetupAPI helper
+rem --- bundled in the driver package (build-output). It replaces the WDK
+rem --- devcon.exe, which user machines do not have.
+set "HELPER=%PKG%\devnode.exe"
+if not exist "%HELPER%" (
+  echo devnode.exe not found in build-output\.
+  echo Staging the package with pnputil only - the device node cannot
+  echo be created without the bundled helper:
   pnputil /add-driver "%PKG%\SimpleAudioSample.inf"
   echo.
-  echo Then create the device manually with the WDK devcon:
-  echo     devcon install "%PKG%\SimpleAudioSample.inf" %HWID%
+  echo Rebuild the package with build-and-sign.bat (it also produces
+  echo devnode.exe), then run install.bat again.
   pause & exit /b 1
 )
-echo     devcon: %DEVCON%
+echo     helper: %HELPER%
 
-"%DEVCON%" remove "%HWID%" >nul 2>&1
-"%DEVCON%" install "%PKG%\SimpleAudioSample.inf" "%HWID%"
-if errorlevel 1 ( echo ERROR: devcon install failed. & pause & exit /b 1 )
+"%HELPER%" remove "%HWID%" >nul 2>&1
+"%HELPER%" install "%PKG%\SimpleAudioSample.inf" "%HWID%"
+if errorlevel 1 ( echo ERROR: device install failed. See the devnode output above. & pause & exit /b 1 )
 
 echo.
 echo --- Device status ---
-"%DEVCON%" status "%HWID%"
+"%HELPER%" status "%HWID%"
 echo.
 echo Done. Check Settings ^> Sound - you should now see:
-echo     Output: Speakers (SoundRelay virtual audio device, shown in Chinese as
-echo             the speaker endpoint of the branded device)
-echo     Input : Microphone (same branded device)
+echo     Output: Speakers (AirBridge Wave Speaker)
+echo     Input : Microphone (AirBridge Wave Microphone)
 echo Device Manager should list the adapter under "Sound, video and game
-echo controllers" with the SoundRelay branded name.
+echo controllers" with the branded device name (Chinese + AirBridge).
 pause
 exit /b 0
