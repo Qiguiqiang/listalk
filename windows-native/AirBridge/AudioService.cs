@@ -143,7 +143,7 @@ public sealed class AudioService : IDisposable
 
     public AudioDeviceInfo? CurrentInput { get; private set; }
     public AudioDeviceInfo? CurrentOutput { get; private set; }
-    public string Status { get; private set; } = "未启动";
+    public string Status { get; private set; } = Loc.Tr("未启动");
     public event Action<string>? Log;
 
     /// <summary>True when the selected capture source structurally contains
@@ -267,7 +267,7 @@ public sealed class AudioService : IDisposable
         _playout.Play();
         _builtRate = rateCode;
         _running = true;
-        Status = $"采集中：{input.Name} / 播放：{output.Name}";
+        Status = Loc.F("采集中：{0} / 播放：{1}", "Capturing: {0} / Playing: {1}", input.Name, output.Name);
         Log?.Invoke($"[设备] 电脑声音采集（发给手机）: {input.Name}{(input.Score > 0 ? $"（自动识别虚拟设备 score={input.Score}）" : "")}");
         Log?.Invoke($"[设备] 手机麦克风播放（给其他应用当麦）: {output.Name}{(output.Score > 0 ? $"（自动识别虚拟设备 score={output.Score}）" : "")}");
     }
@@ -363,6 +363,6 @@ public sealed class AudioService : IDisposable
         _running = false;
     }
 
-    public void Stop() { StopInternal(); Status = "已停止"; }
+    public void Stop() { StopInternal(); Status = Loc.Tr("已停止"); }
     public void Dispose() => StopInternal();
 }

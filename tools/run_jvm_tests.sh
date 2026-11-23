@@ -66,3 +66,13 @@ KOTLINC="$HOME/tools/kotlinc/bin/kotlinc"
     app/src/main/java/com/qi/phoneaudiobridge/InteractionPolicy.kt \
     tools/TestInteraction.kt
 "$JAVA_HOME/bin/java" -cp "tools/interaction-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestInteractionKt
+# focus policy + capture watchdog (board item #3): per-direction pause
+# decoupling — the uplink is gated ONLY by a real call state, media
+# focus moves only the downlink, a permanent focus loss schedules
+# bounded re-requests instead of latching — plus the capture rebuild
+# decisions for silenced / read-erroring recorders.
+"$KOTLINC" -jvm-target 17 -no-reflect -d tools/focus-test.jar \
+    app/src/main/java/com/qi/phoneaudiobridge/FocusPolicy.kt \
+    app/src/main/java/com/qi/phoneaudiobridge/CaptureWatchdog.kt \
+    tools/TestFocus.kt
+"$JAVA_HOME/bin/java" -cp "tools/focus-test.jar:$HOME/tools/kotlinc/lib/kotlin-stdlib.jar" TestFocusKt

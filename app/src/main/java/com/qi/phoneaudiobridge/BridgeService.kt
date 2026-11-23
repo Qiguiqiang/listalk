@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -19,6 +20,12 @@ import android.os.IBinder
 class BridgeService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /** Per-app language (board item #2): notification strings resolve
+     * through this service's context — wrap it like the activity's. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -91,11 +98,20 @@ class BridgeService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val paused = AudioEngine.userPaused
+        // Per-direction pause state (board item #3): a call-paused
+        // uplink or a focus-paused downlink is named in the text
+        // instead of the notification silently claiming all is well.
+        // The engine asks for a re-post (ACTION_REFRESH_FG) whenever
+        // either state flips.
         val b = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(if (paused) getString(R.string.notif_title_paused) else getString(R.string.notif_title_running))
             .setContentText(
-                if (paused) getString(R.string.notif_text_paused)
-                else getString(R.string.notif_text_running)
+                when {
+                    paused -> getString(R.string.notif_text_paused)
+                    AudioEngine.uplinkCallPaused -> getString(R.string.notif_text_call_paused)
+                    AudioEngine.downlinkFocusPaused -> getString(R.string.notif_text_focus_paused)
+                    else -> getString(R.string.notif_text_running)
+                }
             )
             .setSmallIcon(android.R.drawable.stat_sys_speakerphone)
             .setContentIntent(openIntent)

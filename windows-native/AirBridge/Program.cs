@@ -11,6 +11,10 @@ internal static class Program
     public static int Main(string[] args)
     {
         StartupLog.Stage($"process start (v{UpdateChecker.CurrentVersion}), args=[{string.Join(" ", args)}]");
+        // Board item #2: the persisted language override must be in place
+        // before ANY dialog can render (the already-running dialog below
+        // is the first user-visible string of the process).
+        Loc.ApplySetting(AppSettings.Load().Language);
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {

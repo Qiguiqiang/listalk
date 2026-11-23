@@ -51,6 +51,13 @@
     <string name="action_confirm_pair">确认配对</string>
     <string name="action_cancel">取消</string>
     <string name="settings_title">← 设置</string>
+    <string name="settings_language_title">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_zh">中文</string>
+    <string name="language_en">English</string>
+    <string name="language_note">界面立即切换；正在运行的后台服务通知会在服务下次启动时跟随新语言。</string>
+    <string name="diag_line">发现通道 发/收 — 广播 %1$s · mDNS %2$s · 扫描 %3$s · 蓝牙 %4$s · 直连 %5$s · 网络 %6$s · 判定 %7$s</string>
+    <string name="diag_unbound">未绑定</string>
     <string name="settings_reconnect_title">重连方式</string>
     <string name="reconnect_ask_label">每次询问（离开较久回来时，先问我要不要连）</string>
     <string name="reconnect_auto_label">总是自动连接（一出现就连上）</string>
@@ -292,6 +299,12 @@
     <string name="notif_title_running">听说 LisTalk 运行中</string>
     <string name="notif_text_paused">已暂停：点「继续」恢复自动连接</string>
     <string name="notif_text_running">手机麦克风 → 电脑 · 电脑声音 → 手机</string>
+    <string name="notif_text_call_paused">通话中：麦克风已暂停发送</string>
+    <string name="notif_text_focus_paused">其他应用正在播放，电脑声音已暂停</string>
+    <string name="mic_state_call_paused">通话中，麦克风已暂停发送</string>
+    <string name="speaker_state_focus_paused">已暂停（其他应用正在播放）</string>
+    <string name="speaker_state_ducked">已降低音量（其他应用正在播放）</string>
+    <string name="capture_fault_rebuilt">麦克风采集异常，已自动重建</string>
     <string name="notif_action_resume">继续</string>
     <string name="notif_action_pause">暂停</string>
     <string name="notif_action_disconnect">断开</string>

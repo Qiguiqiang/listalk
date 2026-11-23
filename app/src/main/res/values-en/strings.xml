@@ -51,6 +51,13 @@
     <string name="action_confirm_pair">Confirm pairing</string>
     <string name="action_cancel">Cancel</string>
     <string name="settings_title">← Settings</string>
+    <string name="settings_language_title">Language</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_zh">中文</string>
+    <string name="language_en">English</string>
+    <string name="language_note">The interface switches immediately; a running background service notification follows the new language the next time the service starts.</string>
+    <string name="diag_line">Discovery channels sent/received — broadcast %1$s · mDNS %2$s · sweep %3$s · Bluetooth %4$s · direct %5$s · network %6$s · verdict %7$s</string>
+    <string name="diag_unbound">unbound</string>
     <string name="settings_reconnect_title">Reconnect behaviour</string>
     <string name="reconnect_ask_label">Ask every time (after a long absence, ask before connecting)</string>
     <string name="reconnect_auto_label">Always auto-connect (connect as soon as it appears)</string>
@@ -292,6 +299,12 @@
     <string name="notif_title_running">LisTalk running</string>
     <string name="notif_text_paused">Paused — tap Resume to restore auto-connect</string>
     <string name="notif_text_running">Phone mic → PC · PC audio → Phone</string>
+    <string name="notif_text_call_paused">In a call — microphone sending paused</string>
+    <string name="notif_text_focus_paused">Another app is playing — PC audio paused</string>
+    <string name="mic_state_call_paused">In a call — mic sending paused</string>
+    <string name="speaker_state_focus_paused">Paused (another app is playing)</string>
+    <string name="speaker_state_ducked">Volume lowered (another app is playing)</string>
+    <string name="capture_fault_rebuilt">Microphone capture fault — rebuilt automatically</string>
     <string name="notif_action_resume">Resume</string>
     <string name="notif_action_pause">Pause</string>
     <string name="notif_action_disconnect">Disconnect</string>

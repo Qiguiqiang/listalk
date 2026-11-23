@@ -54,6 +54,12 @@ import kotlin.math.roundToInt
  */
 class MainActivity : Activity() {
 
+    /** Per-app language (board item #2): pre-33 wrap; on 33+ the
+     * framework LocaleManager (see AppLocale.apply) governs. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     private val accent = Color.parseColor("#2CE8A5")
     private val accentDim = Color.parseColor("#12362A")
     private val sky = Color.parseColor("#45C7F2")
@@ -1033,8 +1039,20 @@ class MainActivity : Activity() {
                 conn.count { it.micSend }, conn.count { it.speakerRecv },
                 e.worstLossPct, e.worstJitterMs, e.displayBufferMs, e.rxPackets
             )
-            tvMicState.text = if (e.micEnabled) getString(R.string.mic_state_sending_rate, e.sampleRateHz / 1000) else getString(R.string.state_paused)
-            tvMicState.setTextColor(if (e.micEnabled) accent else text3)
+            // mic state (board item #3): a call-paused uplink and a
+            // watchdog-rebuilt capture are named, not silent.
+            tvMicState.text = when {
+                !e.micEnabled -> getString(R.string.state_paused)
+                e.uplinkCallPaused -> getString(R.string.mic_state_call_paused)
+                e.captureFaultActive -> "⚠ ${e.captureFaultText ?: getString(R.string.capture_fault_rebuilt)}"
+                else -> getString(R.string.mic_state_sending_rate, e.sampleRateHz / 1000)
+            }
+            tvMicState.setTextColor(when {
+                !e.micEnabled -> text3
+                e.uplinkCallPaused -> warn
+                e.captureFaultActive -> error
+                else -> accent
+            })
             // echo suppression status: REAL active layers (v2.1 — NLMS wired live)
             val tvEcho = findViewById<TextView>(R.id.tvEchoStatus)
             val echoText = echoStatusText()
@@ -1050,12 +1068,16 @@ class MainActivity : Activity() {
             }
             tvSpkState.text = when {
                 !e.speakerEnabled -> getString(R.string.state_paused)
+                e.downlinkFocusPaused -> getString(R.string.speaker_state_focus_paused)
                 e.playoutFaultActive -> "⚠ ${e.playoutFaultText ?: getString(R.string.playout_fault_default)}"
+                e.downlinkDucked -> getString(R.string.speaker_state_ducked)
                 else -> getString(R.string.speaker_state_playing_mix)
             }
             tvSpkState.setTextColor(when {
                 !e.speakerEnabled -> text3
+                e.downlinkFocusPaused -> warn
                 e.playoutFaultActive -> error
+                e.downlinkDucked -> text2
                 else -> sky
             })
             // loop-guard note (defect 5c): visible for a few seconds after a block
@@ -2064,6 +2086,26 @@ class MainActivity : Activity() {
     private fun wireSettingsUi() {
         findViewById<TextView>(R.id.btnSettingsBack).setOnClickListener { closeTopOverlay() }
         val p = AppSettings.prefs(this)
+        // language radios (board item #2): "" = follow system / zh / en
+        val rgLang = findViewById<android.widget.RadioGroup>(R.id.rgLanguage)
+        when (AppSettings.language(this)) {
+            "zh" -> findViewById<android.widget.RadioButton>(R.id.rbLanguageZh).isChecked = true
+            "en" -> findViewById<android.widget.RadioButton>(R.id.rbLanguageEn).isChecked = true
+            else -> findViewById<android.widget.RadioButton>(R.id.rbLanguageSystem).isChecked = true
+        }
+        rgLang.setOnCheckedChangeListener { _, checkedId ->
+            val lang = when (checkedId) {
+                R.id.rbLanguageZh -> "zh"
+                R.id.rbLanguageEn -> "en"
+                else -> ""
+            }
+            if (lang != AppSettings.language(this)) {
+                AppLocale.apply(this, lang)
+                // 33+: the framework recreates on the locale change.
+                // Below 33 the attachBaseContext wrap needs a recreate.
+                if (android.os.Build.VERSION.SDK_INT < 33) recreate()
+            }
+        }
         // reconnect mode radios
         val rg = findViewById<android.widget.RadioGroup>(R.id.rgReconnect)
         val ask = findViewById<android.widget.RadioButton>(R.id.rbReconnectAsk)

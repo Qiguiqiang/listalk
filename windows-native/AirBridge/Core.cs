@@ -121,6 +121,13 @@ public sealed class AppSettings
     public bool AutoCheckUpdates { get; set; } = true;
     /// <summary>Desktop UI: notify when a phone returns and asks to reconnect (Settings → 通知 group).</summary>
     public bool ReturnAskNotify { get; set; } = true;
+    /// <summary>Interface language (board item #2): "" = follow system,
+    /// "zh" = 中文, "en" = English. Applied via Loc.ApplySetting at startup
+    /// (Program.Main + MainWindow) and live from Settings. Old settings.json
+    /// files have no such field — System.Text.Json leaves the "" default,
+    /// i.e. follow-system, exactly the pre-i18n behaviour; unknown values
+    /// are also treated as follow-system by Loc.ApplySetting.</summary>
+    public string Language { get; set; } = "";
     /// <summary>Desktop UI: phone playback volume shown on the speaker channel card (0–100).
     /// This is only the slider's persisted last-known position: the VALUE itself lives
     /// on the phone (per-device gain). On connect the engine overwrites the slider from

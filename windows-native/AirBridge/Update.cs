@@ -22,7 +22,7 @@ namespace AirBridge;
 public static class UpdateChecker
 {
     public const string UpdateManifestUrl = "https://raw.githubusercontent.com/Qiguiqiang/listalk/main/update.json";
-    public const string CurrentVersion = "2.3.1";
+    public const string CurrentVersion = "2.3.2";
 
     public sealed record UpdateInfo(string Version, string Url, string Sha256, string Notes);
     public sealed record ManifestInfo(UpdateInfo? Windows, UpdateInfo? Android);
@@ -42,7 +42,7 @@ public static class UpdateChecker
     public static async Task<ManifestInfo?> FetchAsync(string manifestUrl)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.2");
         string json = await http.GetStringAsync(manifestUrl);
         using var doc = JsonDocument.Parse(json);
         return new ManifestInfo(ParseEntry(doc.RootElement, "windows"), ParseEntry(doc.RootElement, "android"));
@@ -58,8 +58,8 @@ public static class UpdateChecker
     {
         /// <summary>One-line diagnostics summary (URL + HTTP status + manifest versions).</summary>
         public string Summary => Error is not null
-            ? $"GET {Url} → 失败：{Error}"
-            : $"GET {Url} → HTTP {HttpStatus} · windows={Manifest?.Windows?.Version ?? "无"} · android={Manifest?.Android?.Version ?? "无"}";
+            ? Loc.F("GET {0} → 失败：{1}", "GET {0} → failed: {1}", Url, Error)
+            : Loc.F("GET {0} → HTTP {1} · windows={2} · android={3}", "GET {0} → HTTP {1} · windows={2} · android={3}", Url, HttpStatus, Manifest?.Windows?.Version ?? Loc.T("无", "none"), Manifest?.Android?.Version ?? Loc.T("无", "none"));
     }
 
     public static async Task<FetchReport> FetchReportAsync(string manifestUrl)
@@ -67,7 +67,7 @@ public static class UpdateChecker
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.1");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.2");
             using var resp = await http.GetAsync(manifestUrl);
             int code = (int)resp.StatusCode;
             if (!resp.IsSuccessStatusCode)
@@ -106,7 +106,7 @@ public static class UpdateChecker
     {
         string dest = Path.Combine(Path.GetTempPath(), $"LisTalk-Setup-{info.Version}.exe");
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AirBridge/2.3.2");
         using var resp = await http.GetAsync(info.Url, HttpCompletionOption.ResponseHeadersRead);
         resp.EnsureSuccessStatusCode();
         long total = resp.Content.Headers.ContentLength ?? -1;

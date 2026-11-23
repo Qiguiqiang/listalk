@@ -55,10 +55,15 @@ object AudioEngine {
 
     /** Give the engine a context for localized strings BEFORE it starts
      *  (called from MainActivity.onCreate / BridgeService.onCreate) so
-     *  status / device-name strings resolve in the system language from
-     *  the very first frame. Does not start the engine. */
+     *  status / device-name strings resolve in the selected language
+     *  (AppLocale wrap of the app context) from the very first frame.
+     *  Does not start the engine. */
     fun attachContext(context: Context) {
-        if (appContext == null) appContext = context.applicationContext
+        // Board item #2: keep the engine's string context wrapped for the
+        // persisted language (pre-33; a pass-through on 33+, where the
+        // framework per-app locale governs). Re-wrapping on every attach
+        // lets a fresh activity/service pick up a language change.
+        appContext = AppLocale.wrap(context.applicationContext)
         if (statusText.isEmpty()) statusText = str(R.string.engine_status_not_started)
         if (playoutDiagText.isEmpty()) playoutDiagText = str(R.string.playout_diag_not_started)
     }
@@ -218,49 +223,141 @@ object AudioEngine {
      */
     val echoProcessor = EchoProcessor()
     private var lastCaptureProcessMs = 0L
+    private var lastSilencePollMs = 0L
     private var savedAudioMode = -1
     private var savedSpeakerphone = false
 
-    // ---- audio focus pause (volume-stream fix, design §3.6) ----
+    // ---- per-direction pause policy (board item #3) ----
     /**
-     * True while the bridge is paused because audio focus was taken (a
-     * real incoming call, or another app grabbing focus). This flag is
-     * ONLY written by the focus listener: regaining focus clears exactly
-     * this pause and never overrides a user/session pause, which live in
-     * separate state (per-session autoPaused, channel toggles).
-     * While set: the playout loop drains jitter buffers but renders
-     * silence, and the capture loop sends NOTHING — call audio must
-     * never leak to the PCs.
+     * Pause decisions live in [FocusPolicy] (pure, JVM-tested). The
+     * pre-#3 design had ONE focusPaused flag written by this listener
+     * gating BOTH directions: any media app taking focus latched it
+     * (a permanent AUDIOFOCUS_LOSS is never followed by GAIN), which
+     * silently killed the mic uplink until a bridge restart. Now the
+     * listener feeds ONLY the downlink side of the policy (pause /
+     * duck / bounded re-request after a permanent loss), and the
+     * uplink is gated ONLY by a real telephony call, detected by
+     * polling AudioManager.mode for MODE_IN_CALL / MODE_RINGTONE in
+     * [pollCallAndFocus] — modes the telephony stack sets and this
+     * app never requests (we request MODE_IN_COMMUNICATION), so no
+     * READ_PHONE_STATE permission is needed. §3.6 intent preserved:
+     * while a call is up, capture keeps running locally but nothing
+     * is sent — call audio must never leak to the PCs. Neither pause
+     * ever overrides a user/session pause, which live in separate
+     * state (per-session autoPaused, channel toggles).
      */
-    @Volatile private var focusPaused = false
+    val focusPolicy = FocusPolicy()
+    /** Capture-side rebuild decisions (silence / read-error watchdog). */
+    val captureWatchdog = CaptureWatchdog()
+    /** True while the platform reports our recorder silenced (API 29+). */
+    @Volatile var captureSilenced = false
+        private set
+    /** Times the capture watchdog rebuilt the recorder (diagnostics). */
+    @Volatile var captureRebuilds = 0
+    @Volatile var captureFaultText: String? = null
+    @Volatile var captureFaultUntilMs = 0L
+    /** True while a capture fault note should be visible in the UI. */
+    val captureFaultActive: Boolean get() = System.currentTimeMillis() < captureFaultUntilMs
+    private fun noteCaptureFault(text: String) {
+        captureFaultText = text
+        captureFaultUntilMs = System.currentTimeMillis() + 8000
+    }
+    /** Policy state reads for the UI / notification. */
+    val uplinkCallPaused: Boolean get() = focusPolicy.uplinkPaused
+    val downlinkFocusPaused: Boolean get() = focusPolicy.downlinkPaused
+    val downlinkDucked: Boolean get() = focusPolicy.downlinkDucked
+
     private val focusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { change ->
-        when (change) {
-            android.media.AudioManager.AUDIOFOCUS_LOSS,
-            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                if (!focusPaused) {
-                    focusPaused = true
-                    Log.i(TAG, "audio focus lost ($change): bridge paused (downlink silent, mic not sent)")
-                }
-            }
-            android.media.AudioManager.AUDIOFOCUS_GAIN -> {
-                if (focusPaused) {
-                    focusPaused = false
-                    // The telephony stack ran its own mode/route while it
-                    // held focus; re-assert our session configuration once
-                    // (a controlled exception to the set-once-at-start
-                    // rule, design §3.6).
-                    try {
-                        val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                        if (am != null && running) {
-                            am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
-                            applyOutputRoute()
-                        }
-                    } catch (_: Exception) {}
-                    Log.i(TAG, "audio focus regained: bridge resumed")
-                }
-            }
+        val event = when (change) {
+            android.media.AudioManager.AUDIOFOCUS_GAIN -> FocusPolicy.FocusEvent.GAIN
+            android.media.AudioManager.AUDIOFOCUS_LOSS -> FocusPolicy.FocusEvent.LOSS
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> FocusPolicy.FocusEvent.LOSS_TRANSIENT
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> FocusPolicy.FocusEvent.LOSS_TRANSIENT_CAN_DUCK
+            else -> null
+        } ?: return@OnAudioFocusChangeListener
+        val wasPaused = focusPolicy.downlinkPaused
+        val wasDucked = focusPolicy.downlinkDucked
+        focusPolicy.onFocusEvent(event, System.currentTimeMillis())
+        val changed = focusPolicy.downlinkPaused != wasPaused || focusPolicy.downlinkDucked != wasDucked
+        if (changed) {
+            Log.i(TAG, "audio focus change $change: downlink paused=${focusPolicy.downlinkPaused} ducked=${focusPolicy.downlinkDucked} (uplink unaffected)")
+            refreshServiceForeground()
         }
+        if (event == FocusPolicy.FocusEvent.GAIN && (wasPaused || wasDucked)) {
+            // Whoever held focus ran its own mode/route meanwhile;
+            // re-assert our session configuration once (a controlled
+            // exception to the set-once-at-start rule, design §3.6) —
+            // but never stomp the telephony stack: while a call owns
+            // the audio mode it restores ours when it ends.
+            try {
+                val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                if (am != null && running &&
+                    am.mode != android.media.AudioManager.MODE_IN_CALL &&
+                    am.mode != android.media.AudioManager.MODE_RINGTONE) {
+                    am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+                    applyOutputRoute()
+                }
+            } catch (_: Exception) {}
+            Log.i(TAG, "audio focus regained: downlink resumed")
+        }
+    }
+
+    // ---- call-state poll + focus re-request drive (board item #3) ----
+    /**
+     * Runs ~1/s from adaptLoop.
+     *  - Call gate: MODE_IN_CALL / MODE_RINGTONE are set by the
+     *    telephony stack only, so they are a no-permission real-call
+     *    signal; transitions feed the policy, which gates the uplink
+     *    (and only the uplink). Known limit: VoIP calls running in
+     *    MODE_IN_COMMUNICATION are indistinguishable from our own
+     *    session mode and are not detected.
+     *  - Focus recovery: after a permanent focus LOSS the policy
+     *    schedules bounded re-requests; perform them here. The
+     *    request was built with acceptsDelayedFocusGain, so a request
+     *    the system cannot grant yet is queued and GAIN arrives when
+     *    the other app lets go.
+     */
+    private fun pollCallAndFocus(nowMs: Long) {
+        val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
+        try {
+            val mode = am.mode
+            val inCall = mode == android.media.AudioManager.MODE_IN_CALL ||
+                mode == android.media.AudioManager.MODE_RINGTONE
+            if (inCall != focusPolicy.inCall) {
+                focusPolicy.setInCall(inCall)
+                Log.i(TAG, "call state changed: inCall=$inCall (audio mode=$mode); uplink ${if (inCall) "paused" else "resumed"}")
+                refreshServiceForeground()
+            }
+        } catch (_: Exception) {}
+        if (focusPolicy.shouldReRequestFocus(nowMs)) {
+            val req = audioFocusRequest
+            val res = if (req != null) {
+                try { am.requestAudioFocus(req) } catch (_: Exception) { android.media.AudioManager.AUDIOFOCUS_REQUEST_FAILED }
+            } else {
+                android.media.AudioManager.AUDIOFOCUS_REQUEST_FAILED
+            }
+            focusPolicy.onFocusReRequestPerformed(nowMs)
+            Log.i(TAG, "audio focus re-request after permanent loss -> $res")
+        }
+    }
+
+    /** API 29+: is the platform muting our recorder for another
+     * capture? Matched by audio session id against the active
+     * recording configurations. Pre-29 exposes no such signal; the
+     * silence watchdog alone covers those devices. */
+    private fun refreshCaptureSilenced(rec: android.media.AudioRecord) {
+        if (Build.VERSION.SDK_INT < 29) return
+        try {
+            val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
+            val sid = rec.audioSessionId
+            val silenced = am.getActiveRecordingConfigurations().any {
+                it.clientAudioSessionId == sid && it.isClientSilenced
+            }
+            if (silenced != captureSilenced) {
+                captureSilenced = silenced
+                Log.w(TAG, "recorder silenced by another capture: $silenced")
+            }
+        } catch (_: Exception) {}
     }
 
     // ---- audio routing & capture policy (v2.1 defects 1/2/3) ----
@@ -813,10 +910,16 @@ object AudioEngine {
     fun discoveryDiagText(): String {
         val s = diag.snapshot()
         fun ch(c: DiscoveryDiag.Channel) = "${s.sent(c)}/${s.received(c)}"
-        return "发现通道 发/收 — 广播 ${ch(DiscoveryDiag.Channel.BROADCAST)} · " +
-            "mDNS ${ch(DiscoveryDiag.Channel.MDNS)} · 扫描 ${ch(DiscoveryDiag.Channel.SWEEP)} · " +
-            "蓝牙 ${ch(DiscoveryDiag.Channel.BLE)} · 直连 ${ch(DiscoveryDiag.Channel.DIRECT)} · " +
-            "网络 ${pinnedNetworkLabel.ifEmpty { "未绑定" }} · 判定 $currentVerdict"
+        // Localized via resources (board item #2; the verdict stays the
+        // enum name — a technical token, same in both languages).
+        return str(
+            R.string.diag_line,
+            ch(DiscoveryDiag.Channel.BROADCAST), ch(DiscoveryDiag.Channel.MDNS),
+            ch(DiscoveryDiag.Channel.SWEEP), ch(DiscoveryDiag.Channel.BLE),
+            ch(DiscoveryDiag.Channel.DIRECT),
+            pinnedNetworkLabel.ifEmpty { str(R.string.diag_unbound) },
+            currentVerdict.toString()
+        )
     }
 
     private var recorder: AudioRecord? = null
@@ -871,15 +974,19 @@ object AudioEngine {
             // minSdk is 26 (build script), so the AudioFocusRequest path is
             // the only one. The request carries the MEDIA attributes of the
             // playback track (volume-stream fix): for the session we are a
-            // media player (AUDIOFOCUS_GAIN), and the focus listener is
-            // what pauses the bridge for a real phone call (§3.6) — it was
-            // previously not registered at all.
+            // media player (AUDIOFOCUS_GAIN). The focus listener drives
+            // ONLY the downlink side of FocusPolicy (board item #3); the
+            // §3.6 call pause of the uplink is mode-polled, not
+            // focus-driven. Delayed gain is accepted so the bounded
+            // re-requests after a permanent loss can be queued by the
+            // system instead of failing while another app holds focus.
             val attrs = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
             val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(attrs)
                 .setWillPauseWhenDucked(false)
+                .setAcceptsDelayedFocusGain(true)
                 .setOnAudioFocusChangeListener(focusChangeListener, android.os.Handler(android.os.Looper.getMainLooper()))
                 .build()
             audioFocusRequest = req
@@ -1322,7 +1429,9 @@ object AudioEngine {
                 }
             }
         } catch (_: Exception) {}
-        focusPaused = false
+        focusPolicy.reset()
+        captureWatchdog.reset()
+        captureSilenced = false
         loopGuard.reset()
         saveRegistry()
     }
@@ -2256,7 +2365,7 @@ object AudioEngine {
             cameraRelayActive = false
             cameraRelay = null
             if (wasActive) for (s in sessions.values) if (s.videoWanted) sendVideoState(s, false, reason)
-            refreshServiceForegroundType()
+            refreshServiceForeground()
         }
     }
 
@@ -2282,7 +2391,7 @@ object AudioEngine {
         cameraRelayActive = true
         ensureVideoTxThread()
         relay.start(quality)
-        refreshServiceForegroundType()
+        refreshServiceForeground()
         Log.i(TAG, "VideoRelay started (quality=$quality)")
     }
 
@@ -2295,7 +2404,7 @@ object AudioEngine {
         videoConfigJson = null
         videoTxQueue.clear()
         try { relay?.stop() } catch (_: Exception) {}
-        refreshServiceForegroundType()
+        refreshServiceForeground()
         Log.i(TAG, "VideoRelay stopped: $videoStatsText")
     }
 
@@ -2397,13 +2506,15 @@ object AudioEngine {
         }
     }
 
-    /** Android 14: an FGS that uses the camera must carry the camera
-     * foreground-service type. Ask BridgeService to re-post its
-     * foreground notification with the right type set (it reads
-     * [cameraRelayActive]). A no-op while the service isn't running —
-     * in Activity-bound mode the app is in the foreground, where
-     * camera access needs no FGS type. */
-    private fun refreshServiceForegroundType() {
+    /** Ask BridgeService to re-post its foreground notification.
+     * Two readers state-drive the re-post: Android 14 requires the
+     * camera FGS type while the camera relay is live (it reads
+     * [cameraRelayActive]), and the notification text reflects the
+     * per-direction pause state (board item #3: call-paused uplink,
+     * focus-paused downlink). A no-op while the service isn't
+     * running — in Activity-bound mode the app is in the foreground,
+     * where camera access needs no FGS type. */
+    private fun refreshServiceForeground() {
         if (!BridgeService.isRunning) return
         val ctx = appContext ?: return
         try {
@@ -2531,6 +2642,11 @@ object AudioEngine {
             // route-drift watchdog: re-pin if the OEM stack moved the
             // confirmed communication device away from our target.
             confirmOutputRoute()
+
+            // call gate + focus recovery (board item #3): poll the
+            // telephony-owned audio mode for the uplink call gate and
+            // perform any due bounded focus re-request.
+            pollCallAndFocus(nowMs)
 
             // presence staleness edges (v2.1): a session whose beacons stop
             // becomes "absent" — the absence clock for the re-entry logic.
@@ -2865,22 +2981,54 @@ object AudioEngine {
             if (recorder == null) {
                 if (!buildRecorder()) { Thread.sleep(300); continue }
                 recorderBuiltRate = currentRateCode
+                captureWatchdog.onRecorderStarted(System.currentTimeMillis())
                 // Starting the record stream is one of the events that
                 // makes OEM stacks reset the communication device
                 // (research note §1.2): re-pin OUR route afterwards.
                 applyOutputRoute()
             }
             val rec = recorder ?: continue
+            // Silenced-recorder poll (board item #3): ~1/s, matched by
+            // audio session id — see refreshCaptureSilenced.
+            val silencePollNowMs = System.currentTimeMillis()
+            if (silencePollNowMs - lastSilencePollMs >= 1000) {
+                lastSilencePollMs = silencePollNowMs
+                refreshCaptureSilenced(rec)
+            }
             val frameSamples = Protocol.frameSamples(currentRateCode)
             val factor = if (recorderRateHz > 0) recorderRateHz / sampleRateHz else 1
             val need = frameSamples * maxOf(1, factor)
             var filled = 0
+            var readFailed = false
             while (filled < need && running) {
                 val n = try { rec.read(readBuf, filled, need - filled) } catch (_: Exception) { -1 }
-                if (n <= 0) break
+                if (n <= 0) { readFailed = true; break }
                 filled += n
             }
-            if (filled < need) continue
+            if (filled < need) {
+                // Read failure (board item #3): the pre-#3 loop broke
+                // out and retried the SAME dead recorder forever — the
+                // rebuild branch above was unreachable from a read
+                // error. Failures now go through the watchdog: on its
+                // verdict (streak + rate limit), or when the recorder
+                // reports itself stopped, release the recorder so the
+                // null branch rebuilds it. The sleep keeps a
+                // permanently broken stack from hot-spinning meanwhile.
+                if (readFailed) {
+                    val stopped = try {
+                        rec.recordingState == android.media.AudioRecord.RECORDSTATE_STOPPED
+                    } catch (_: Exception) { false }
+                    if (captureWatchdog.onReadError(System.currentTimeMillis(), recorderStopped = stopped)) {
+                        Log.e(TAG, "capture read failing (recorderStopped=$stopped); rebuilding recorder")
+                        noteCaptureFault(str(R.string.capture_fault_rebuilt))
+                        captureRebuilds++
+                        releaseRecorder()
+                    }
+                    Thread.sleep(50)
+                }
+                continue
+            }
+            captureWatchdog.onReadSuccess()
             val frame = ShortArray(frameSamples)
             if (factor <= 1) {
                 System.arraycopy(readBuf, 0, frame, 0, frameSamples)
@@ -2919,19 +3067,36 @@ object AudioEngine {
             }
             val payload = ByteArray(frameSamples * 2)
             var sumSq = 0.0
+            var peak = 0
             for (i in frame.indices) {
                 payload[i * 2] = (frame[i].toInt() and 0xFF).toByte()
                 payload[i * 2 + 1] = ((frame[i].toInt() shr 8) and 0xFF).toByte()
                 sumSq += frame[i].toDouble() * frame[i].toDouble()
+                val a = kotlin.math.abs(frame[i].toInt())
+                if (a > peak) peak = a
             }
             val rms = kotlin.math.sqrt(sumSq / frameSamples) / 32768.0
             val lvl = (rms * 3.0).toFloat().coerceIn(0f, 1f)
             micLevel = maxOf(lvl, micLevel * 0.72f)
-            // Focus pause (§3.6): while a real call holds audio focus the
-            // capture chain keeps running locally, but NOTHING is sent —
-            // call audio must never leak to the PCs. The loop-guard
-            // history is likewise fed only with frames actually sent.
-            if (!focusPaused) {
+            // Capture watchdog (board item #3): sustained near-zero
+            // frames mean the recorder was silenced by another capture
+            // or died quietly — rebuild it (bounded by the watchdog).
+            // Frames are inhibited while the platform reports us
+            // silenced or a call owns the mic: explained silence.
+            if (captureWatchdog.onFrame(peak / 32768f, procNowMs, inhibited = captureSilenced || focusPolicy.inCall)) {
+                Log.e(TAG, "capture silent too long (platformSilenced=$captureSilenced); rebuilding recorder")
+                noteCaptureFault(str(R.string.capture_fault_rebuilt))
+                captureRebuilds++
+                releaseRecorder()
+                continue
+            }
+            // Call gate (§3.6, board item #3): while a real telephony
+            // call is up the capture chain keeps running locally, but
+            // NOTHING is sent — call audio must never leak to the PCs.
+            // Media audio-focus events no longer gate this path at all.
+            // The loop-guard history is likewise fed only with frames
+            // actually sent.
+            if (!focusPolicy.uplinkPaused) {
                 // Loop-guard history: the exact samples about to be sent.
                 loopGuard.pushSentMic(frame)
                 // fan-out: same frame, per-session sequence numbers
@@ -3025,12 +3190,13 @@ object AudioEngine {
                     shorts[i] = v.toShort()
                     i++
                 }
-                // Focus pause (§3.6): the frame was still popped — the
-                // jitter buffer keeps draining so nothing stale piles up
-                // during a call — but it is NOT mixed; the write path
-                // below renders silence, keeping the track fed and the
-                // NLMS reference timeline sample-continuous.
-                if (focusPaused) continue
+                // Downlink focus pause (board item #3): the frame was
+                // still popped — the jitter buffer keeps draining so
+                // nothing stale piles up while another app holds audio
+                // focus — but it is NOT mixed; the write path below
+                // renders silence, keeping the track fed and the NLMS
+                // reference timeline sample-continuous.
+                if (focusPolicy.downlinkPaused) continue
                 // Loop-guard (defect 5c): if this frame is our OWN mic
                 // voice returned by the PC (contaminated capture source),
                 // drop it and surface the status note.
@@ -3039,7 +3205,11 @@ object AudioEngine {
                     continue
                 }
                 val pd = pairedFor(s)
-                val vol = if (pd?.muted == true) 0.0 else (pd?.speakerVolume ?: 0.7f).toDouble()
+                // Focus duck (board item #3): another app holds a
+                // duckable focus claim — lower our render volume
+                // instead of pausing the downlink outright.
+                val duck = if (focusPolicy.downlinkDucked) FocusPolicy.DUCK_GAIN.toDouble() else 1.0
+                val vol = if (pd?.muted == true) 0.0 else (pd?.speakerVolume ?: 0.7f).toDouble() * duck
                 for (j in 0 until frameSamples) mix[j] += (shorts[j] * vol).toInt()
             }
             // v2.1: a frame is written EVERY tick (silence when no source

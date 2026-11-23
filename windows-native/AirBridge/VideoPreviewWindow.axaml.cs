@@ -37,6 +37,8 @@ public partial class VideoPreviewWindow : Window
     {
         _engine = engine;
         InitializeComponent();
+        Loc.ApplyTo(this); // static XAML strings -> selected language (board item #2)
+        Opened += (_, _) => Loc.ApplyTo(this); // ctor walk is partial pre-show (see MainWindow)
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => RefreshFrame();
         Opened += (_, _) => _timer.Start();

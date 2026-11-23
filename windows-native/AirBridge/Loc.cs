@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
-using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 
 namespace AirBridge;
 
@@ -11,11 +11,27 @@ namespace AirBridge;
 /// The brand name 「听说 LisTalk」 is never translated.
 /// Static XAML strings are translated by walking the visual tree (ApplyTo);
 /// dynamic strings go through Tr/T/F at their assignment sites.
+/// Board item #2: a persisted user override (AppSettings.Language —
+/// "zh" / "en" / "" = follow system) wins over the OS culture. ApplyTo is
+/// bidirectional (Map forward, ReverseMap back) so a live switch in
+/// Settings re-renders static strings in both directions.
 /// </summary>
 public static class Loc
 {
-    public static bool IsZh =>
-        CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+    /// <summary>User override: "zh" | "en" | null (follow system).</summary>
+    public static string? Override { get; set; }
+
+    /// <summary>Apply the persisted AppSettings.Language value;
+    /// "" or anything unknown = follow system.</summary>
+    public static void ApplySetting(string? setting) =>
+        Override = setting switch { "zh" => "zh", "en" => "en", _ => null };
+
+    public static bool IsZh => Override switch
+    {
+        "zh" => true,
+        "en" => false,
+        _ => CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase),
+    };
     public static bool IsEn => !IsZh;
 
     /// <summary>Pick by current culture.</summary>
@@ -30,6 +46,11 @@ public static class Loc
 
     public static readonly Dictionary<string, string> Map = new()
     {
+        // ---- language setting (board item #2) ----
+        ["语言"] = "Language",
+        ["界面语言"] = "Interface language",
+        ["跟随系统"] = "Follow system",
+        ["界面显示语言，切换后立即生效"] = "Interface language — takes effect immediately",
         // ---- title bar / window chrome ----
         ["最小化"] = "Minimize",
         ["最大化 / 还原"] = "Maximize / Restore",
@@ -156,7 +177,7 @@ public static class Loc
         ["网络变差时自动降低采样率保流畅，恢复后自动升回"] = "Lowers the sample rate automatically when the network degrades, and raises it again when it recovers",
         ["听说虚拟音频设备"] = "LisTalk Virtual Audio Device",
         ["自动检查更新"] = "Check for updates automatically",
-        ["当前版本 v2.3.1 · 发现新版本时在侧边栏提醒"] = "Current version v2.3.1 · New versions are flagged in the sidebar",
+        ["当前版本 v2.3.2 · 发现新版本时在侧边栏提醒"] = "Current version v2.3.2 · New versions are flagged in the sidebar",
         ["检查更新"] = "Check for updates",
         ["更新状态"] = "Update status",
         ["尚未检查"] = "Not checked yet",
@@ -242,30 +263,68 @@ public static class Loc
         ["采集源与手机麦克风共用同一条虚拟线缆（CABLE Output ← CABLE Input）——手机麦克风会混入电脑声音被发回"] = "The capture source shares one virtual cable with the phone microphone (CABLE Output ← CABLE Input) — the phone mic would be mixed into PC audio and sent back",
         ["未启动"] = "Not started",
         ["非 Windows，跳过"] = "Not Windows — skipped",
+        // ---- board item #2 coverage additions ----
+        ["已停止"] = "Stopped",
+        ["等待手机摄像头画面…"] = "Waiting for the phone camera…",
+        ["UDP · 47731 · PCM16 · 协议 v2"] = "UDP · 47731 · PCM16 · Protocol v2",
+        // NOTE: version-baked like the 当前版本 v… entry above — the release
+        // checklist's version-literal sweep must update this key too.
+        ["版本 v2.3.2 · Windows 版"] = "Version v2.3.2 · Windows",
     };
 
-    /// <summary>Translate every static string in the window's visual tree
-    /// (TextBlock text + inline Runs, string Button contents, tooltips).
-    /// No-op in Chinese UI culture — XAML already carries the Chinese source.</summary>
+    // en → zh, built from Map for live switch-back. Entries whose English
+    // text is itself a Chinese source string are skipped (ambiguous), as
+    // are identity pairs; the first zh wins on duplicate English values.
+    private static Dictionary<string, string>? _reverse;
+    private static Dictionary<string, string> ReverseMap
+    {
+        get
+        {
+            if (_reverse is not null) return _reverse;
+            var r = new Dictionary<string, string>();
+            foreach (var (zh, en) in Map)
+            {
+                if (string.IsNullOrEmpty(en) || en == zh) continue;
+                if (Map.ContainsKey(en)) continue;
+                r.TryAdd(en, zh);
+            }
+            return _reverse = r;
+        }
+    }
+
+    /// <summary>Translate a known English string back to its Chinese source;
+    /// unknown strings pass through.</summary>
+    public static string ReverseTr(string en) =>
+        ReverseMap.TryGetValue(en, out var zh) ? zh : en;
+
+    /// <summary>Translate every static string in the window's LOGICAL tree
+    /// (TextBlock text + inline Runs, string Button contents, tooltips)
+    /// into the currently selected language. The logical tree is walked,
+    /// not the visual tree: hidden pages and not-yet-scrolled ScrollViewer
+    /// content have no visual descendants until shown, and a visual walk
+    /// silently misses them (found by the board #2 smoke renders — the
+    /// lower Settings cards stayed Chinese in EN mode). At startup in
+    /// Chinese this is a no-op — XAML already carries the Chinese source;
+    /// after a live language switch it converts in either direction.</summary>
     public static void ApplyTo(Control root)
     {
-        if (IsZh) return;
-        foreach (var v in root.GetVisualDescendants())
+        string X(string s) => IsZh ? ReverseTr(s) : Tr(s);
+        foreach (var v in root.GetLogicalDescendants())
         {
             if (v is TextBlock tb)
             {
-                if (!string.IsNullOrEmpty(tb.Text)) tb.Text = Tr(tb.Text!);
+                if (!string.IsNullOrEmpty(tb.Text)) tb.Text = X(tb.Text!);
                 if (tb.Inlines is not null)
                     foreach (var inline in tb.Inlines)
                         if (inline is Run run && !string.IsNullOrEmpty(run.Text))
-                            run.Text = Tr(run.Text);
+                            run.Text = X(run.Text);
             }
             if (v is Button btn && btn.Content is string s && s.Length > 0)
-                btn.Content = Tr(s);
+                btn.Content = X(s);
             if (v is Control c)
             {
                 var tip = ToolTip.GetTip(c);
-                if (tip is string ts && ts.Length > 0) ToolTip.SetTip(c, Tr(ts));
+                if (tip is string ts && ts.Length > 0) ToolTip.SetTip(c, X(ts));
             }
         }
     }

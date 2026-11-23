@@ -15,7 +15,7 @@
     <AssemblyName>AirBridge</AssemblyName>
     <RootNamespace>AirBridge</RootNamespace>
     <Product>听说 LisTalk</Product>
-    <Version>2.3.1</Version>
+    <Version>2.3.2</Version>
     <Company>Gray</Company>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>

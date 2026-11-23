@@ -236,7 +236,7 @@ public sealed class BridgeEngine
         lock (_winLock) _pairWindows[d.DeviceId] = DateTime.UtcNow.AddSeconds(120);
         if (IPAddress.TryParse(d.Ip, out var ip))
             SendDiscoverResp(new IPEndPoint(ip, Protocol.Port));
-        LastEvent = $"已向 {d.Name} 发起配对，等待手机确认…";
+        LastEvent = Loc.F("已向 {0} 发起配对，等待手机确认…", "Pairing requested from {0} — waiting for confirmation on the phone…", d.Name);
         EmitLog(LastEvent);
         StateChanged?.Invoke();
     }
@@ -247,7 +247,7 @@ public sealed class BridgeEngine
         lock (_winLock) _connectWindows[d.DeviceId] = DateTime.UtcNow.AddSeconds(60);
         if (IPAddress.TryParse(d.Ip, out var ip))
             SendDiscoverResp(new IPEndPoint(ip, Protocol.Port));
-        LastEvent = $"已请求 {d.Name} 连接…";
+        LastEvent = Loc.F("已请求 {0} 连接…", "Connect requested from {0}…", d.Name);
         StateChanged?.Invoke();
     }
 
@@ -264,7 +264,7 @@ public sealed class BridgeEngine
         var ep = new IPEndPoint(ip, Protocol.Port);
         SendDiscoverResp(ep);
         Send(Protocol.TypeBeacon, BeaconPayload(), 0, 0, RateCode, ep);
-        LastEvent = $"已向 {pp.Name} 的上次地址 {pp.LastIp} 发起连接…";
+        LastEvent = Loc.F("已向 {0} 的上次地址 {1} 发起连接…", "Connecting to {0} at its last address {1}…", pp.Name, pp.LastIp);
         EmitLog(LastEvent);
         StateChanged?.Invoke();
     }
@@ -816,7 +816,7 @@ public sealed class BridgeEngine
             ack["verifyCode"] = Protocol.VerifyCodeFor(Config.Token, phoneId);
             LastVerifyCode = (string)ack["verifyCode"]!;
             LastPairPhone = PeerName;
-            LastEvent = $"新手机已配对：{PeerName}，核对验证码 {LastVerifyCode}";
+            LastEvent = Loc.F("新手机已配对：{0}，核对验证码 {1}", "New phone paired: {0} — verify code {1}", PeerName, LastVerifyCode);
             EmitLog($"[配对] {LastEvent}（应与手机确认屏上一致）");
         }
         else if (Config.PairedPhones.TryGetValue(phoneId, out var pp))

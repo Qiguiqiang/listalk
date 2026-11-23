@@ -32,7 +32,8 @@ public sealed class MdnsDiscovery : IDisposable
     private MulticastService? _mdns;
     private ServiceDiscovery? _sd;
     private CancellationTokenSource? _queryCts;
-    public string Status { get; private set; } = Loc.Tr("未启动");
+    private Func<string> _status = () => Loc.Tr("未启动");
+    public string Status => _status(); // computed: re-renders in the current UI language on every read (board item #2)
     public event Action<string>? Log;
 
     public MdnsDiscovery(BridgeEngine engine) => _engine = engine;
@@ -65,12 +66,12 @@ public sealed class MdnsDiscovery : IDisposable
                     try { await Task.Delay(3000, ct); } catch { break; }
                 }
             }, ct);
-            Status = $"已广播 {BleIdentity.MdnsServiceType}（deviceId={_engine.Config.DeviceId}）";
+            _status = () => Loc.F("已广播 {0}（deviceId={1}）", "Broadcasting {0} (deviceId={1})", BleIdentity.MdnsServiceType, _engine.Config.DeviceId);
             Log?.Invoke($"[mDNS] {Status}");
         }
         catch (Exception ex)
         {
-            Status = $"启动失败：{ex.Message}";
+            _status = () => Loc.F("启动失败：{0}", "Start failed: {0}", ex.Message);
             Log?.Invoke($"[mDNS] {Status}");
         }
     }
@@ -142,13 +143,14 @@ public sealed class MdnsDiscovery : IDisposable
 public sealed class BleAdvertiser
 {
     private BluetoothLEAdvertisementPublisher? _publisher;
-    public string Status { get; private set; } = Loc.Tr("未启动");
+    private Func<string> _status = () => Loc.Tr("未启动");
+    public string Status => _status(); // computed: re-renders in the current UI language on every read (board item #2)
     public event Action<string>? Log;
 
     public void Start(AppConfig config)
     {
         if (!OperatingSystem.IsWindows())
-        { Status = Loc.Tr("非 Windows，跳过"); return; }
+        { _status = () => Loc.Tr("非 Windows，跳过"); return; }
         try
         {
             _publisher = new BluetoothLEAdvertisementPublisher();
@@ -174,16 +176,16 @@ public sealed class BleAdvertiser
             _publisher.Advertisement.ManufacturerData.Add(mdata);
             _publisher.StatusChanged += (_, e) =>
             {
-                Status = $"发布器状态：{e.Status}";
+                _status = () => Loc.F("发布器状态：{0}", "Publisher state: {0}", e.Status);
                 Log?.Invoke($"[BLE] {Status}");
             };
             _publisher.Start();
-            Status = $"已开始广播 UUID {BleIdentity.ServiceUuid}";
+            _status = () => Loc.F("已开始广播 UUID {0}", "Broadcasting UUID {0}", BleIdentity.ServiceUuid);
             Log?.Invoke($"[BLE] {Status}");
         }
         catch (Exception ex)
         {
-            Status = $"启动失败：{ex.GetType().Name}: {ex.Message}";
+            _status = () => Loc.F("启动失败：{0}: {1}", "Start failed: {0}: {1}", ex.GetType().Name, ex.Message);
             Log?.Invoke($"[BLE] {Status}");
         }
     }

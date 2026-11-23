@@ -28,6 +28,9 @@ public partial class MainWindow : Window
     private NativeMenuItem? _trayMic;
     private NativeMenuItem? _traySpk;
     private NativeMenuItem? _trayDisc;
+    private NativeMenuItem? _trayOpen;
+    private NativeMenuItem? _traySettings;
+    private NativeMenuItem? _trayExit;
 
     private readonly List<double> _rttHistory = new();
     private readonly List<string> _logLines = new();
@@ -78,6 +81,7 @@ public partial class MainWindow : Window
         if (_config.EnsureIdentity()) _config.Save();
         if (_config.EnsurePairCode()) _config.Save();
         _settings = AppSettings.Load();
+        Loc.ApplySetting(_settings.Language); // board item #2: persisted language override, before any UI string renders
         StartupLog.Stage("MainWindow: config + settings loaded");
         _engine = new BridgeEngine(_config, _settings);
         _engine.VirtualCamera = new VirtualCameraService(_engine);
@@ -97,7 +101,14 @@ public partial class MainWindow : Window
         SetupTray();
         StartupLog.Stage("MainWindow: tray ready");
         InitControls();
-        Loc.ApplyTo(this); // static XAML strings -> system UI language (no-op for zh)
+        Loc.ApplyTo(this); // static XAML strings -> selected language
+        // The ctor-time walk only reaches the part of the visual tree that
+        // exists before the window is shown (ScrollViewer content, overlay
+        // layers and templated subtrees attach on show) — re-apply once
+        // the window opens so EVERY static string is translated. (This
+        // also fixes the shipped v2.2 EN mode, whose ctor walk silently
+        // missed those subtrees.)
+        Opened += (_, _) => Loc.ApplyTo(this);
         _uiReady = true;
         StartupLog.Stage("MainWindow: controls ready");
 
@@ -226,12 +237,8 @@ public partial class MainWindow : Window
         InitTitleBar();
         sideVersion.Text = "v" + UpdateChecker.CurrentVersion;
         navAboutVer.Text = "v" + UpdateChecker.CurrentVersion;
-        tbAboutVer.Text = Loc.F("版本 v{0} · Windows 版", "Version v{0} · Windows", UpdateChecker.CurrentVersion);
-        tbSetFoot.Text = Loc.F("听说 LisTalk v{0} · 设置保存在本机，不上传任何数据", "LisTalk v{0} · Settings are stored locally — nothing is uploaded", UpdateChecker.CurrentVersion);
+        SetLocalIdentityTexts();
         tbPortRun.Text = _config.Port.ToString();
-        tbLocalChip.Text = Loc.F("本机 {0} · {1}", "This PC {0} · {1}", Environment.MachineName, BridgeEngine.LocalIp());
-        tbAboutProto.Text = Loc.F("UDP · {0} · PCM16 · 协议 v{1}", "UDP · {0} · PCM16 · Protocol v{1}", _config.Port, Protocol.ProtoVersion);
-        tvAboutLocal.Text = Loc.F("{0} · {1} · 设备 ID {2}…", "{0} · {1} · Device ID {2}…", Environment.MachineName, BridgeEngine.LocalIp(), _config.DeviceId[..Math.Min(6, _config.DeviceId.Length)]);
 
         // channels
         swMic.IsChecked = _settings.MicToPc;
@@ -315,6 +322,9 @@ public partial class MainWindow : Window
             _settings.Save();
             _engine.ApplyRatePreference();
         };
+        // settings: language segmented （跟随系统 / 中文 / English), board item #2
+        segLanguage.SetItems(new[] { Loc.Tr("跟随系统"), "中文", "English" }, LanguageIndex());
+        segLanguage.SelectionChanged += (_, idx) => SetLanguage(idx switch { 1 => "zh", 2 => "en", _ => "" });
         swAutoStart.IsChecked = _settings.StartOnLogin;
         swCloseToTray.IsChecked = _settings.CloseToTray;
         swNotifications.IsChecked = _settings.Notifications;
@@ -365,6 +375,55 @@ public partial class MainWindow : Window
         segReconnect.Select(ReconnectModeIndex(), raise: false);
         _lastListSig = ""; // discover rows re-render their auto-connect switches
         AppendLog($"[设置] 手机回到附近时：{mode switch { "ask" => "每次询问", "always" => "总是自动连接", _ => "从不自动" }}");
+    }
+
+    /// <summary>One-shot formatted identity/version labels (About page,
+    /// settings footer, local-PC chip). They are formatted once, so the
+    /// ApplyTo walk cannot re-translate them — a live language switch
+    /// re-runs this instead. Called from InitControls and ApplyLanguageToUi.</summary>
+    private void SetLocalIdentityTexts()
+    {
+        tbAboutVer.Text = Loc.F("版本 v{0} · Windows 版", "Version v{0} · Windows", UpdateChecker.CurrentVersion);
+        tbSetFoot.Text = Loc.F("听说 LisTalk v{0} · 设置保存在本机，不上传任何数据", "LisTalk v{0} · Settings are stored locally — nothing is uploaded", UpdateChecker.CurrentVersion);
+        tbLocalChip.Text = Loc.F("本机 {0} · {1}", "This PC {0} · {1}", Environment.MachineName, BridgeEngine.LocalIp());
+        tbAboutProto.Text = Loc.F("UDP · {0} · PCM16 · 协议 v{1}", "UDP · {0} · PCM16 · Protocol v{1}", _config.Port, Protocol.ProtoVersion);
+        tvAboutLocal.Text = Loc.F("{0} · {1} · 设备 ID {2}…", "{0} · {1} · Device ID {2}…", Environment.MachineName, BridgeEngine.LocalIp(), _config.DeviceId[..Math.Min(6, _config.DeviceId.Length)]);
+    }
+
+    // ---------------- language (board item #2) ----------------
+    private int LanguageIndex() => _settings.Language switch { "zh" => 1, "en" => 2, _ => 0 };
+
+    private void SetLanguage(string lang)
+    {
+        if (_settings.Language == lang) return;
+        _settings.Language = lang;
+        _settings.Save();
+        Loc.ApplySetting(lang);
+        ApplyLanguageToUi();
+    }
+
+    /// <summary>Re-render everything a language switch touches: static XAML
+    /// strings (bidirectional ApplyTo), the segmented controls whose items
+    /// were baked at InitControls time, and the tray items created once in
+    /// SetupTray. Poll() then re-renders all dynamic labels + tray
+    /// status/pause headers in the new language on its next tick — it is
+    /// called directly here so the flip is visible immediately.</summary>
+    private void ApplyLanguageToUi()
+    {
+        Loc.ApplyTo(this);
+        segReconnect.SetItems(new[] { Loc.Tr("每次询问"), Loc.Tr("总是自动连接"), Loc.Tr("从不自动") }, ReconnectModeIndex());
+        segRate.SetItems(new[] { Loc.Tr("自适应"), Loc.Tr("锁定 48 kHz"), Loc.Tr("锁定 24 kHz"), Loc.Tr("锁定 16 kHz") },
+            _settings.SampleRatePreference switch { "48000" => 1, "24000" => 2, "16000" => 3, _ => 0 });
+        segLanguage.SetItems(new[] { Loc.Tr("跟随系统"), "中文", "English" }, LanguageIndex());
+        if (_trayOpen is not null) _trayOpen.Header = Loc.Tr("打开主窗口");
+        if (_traySettings is not null) _traySettings.Header = Loc.Tr("设置…");
+        if (_trayExit is not null) _trayExit.Header = Loc.Tr("退出听说");
+        if (_trayMic is not null) _trayMic.Header = Loc.Tr("麦克风 → 电脑");
+        if (_traySpk is not null) _traySpk.Header = Loc.Tr("电脑 → 扬声器");
+        SyncPauseLabels(); // pause labels are event-driven, not Poll-driven
+        SetLocalIdentityTexts(); // one-shot formatted labels cannot be re-translated by the walk
+        _lastListSig = ""; // discover rows / device lists rebuild in the new language on the next Poll
+        Poll();
     }
 
     private void UpdateChannelCards()
@@ -833,6 +892,7 @@ public partial class MainWindow : Window
     {
         _trayStatus = new NativeMenuItem(Loc.Tr("听说 LisTalk · 未连接")) { IsEnabled = false };
         var open = new NativeMenuItem(Loc.Tr("打开主窗口"));
+        _trayOpen = open;
         open.Click += (_, _) => ShowFromTray();
         _trayPause = new NativeMenuItem(Loc.Tr("暂停推流"));
         _trayPause.Click += (_, _) => TogglePause();
@@ -843,8 +903,10 @@ public partial class MainWindow : Window
         _trayDisc = new NativeMenuItem(Loc.Tr("断开")) { IsEnabled = false };
         _trayDisc.Click += (_, _) => DisconnectSession();
         var settings = new NativeMenuItem(Loc.Tr("设置…"));
+        _traySettings = settings;
         settings.Click += (_, _) => { ShowFromTray(); ShowPage(Page.Settings); };
         var exit = new NativeMenuItem(Loc.Tr("退出听说"));
+        _trayExit = exit;
         exit.Click += (_, _) => RequestExit();
         var menu = new NativeMenu();
         menu.Items.Add(_trayStatus);

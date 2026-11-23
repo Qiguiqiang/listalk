@@ -46,6 +46,16 @@ object AppSettings {
      *  unicast sweep, free-form text ("192.168.88.0/24, 192.168.99.0/24").
      *  Parsed by SubnetSweep.splitSpecs/parseSubnetSpec. */
     const val KEY_EXTRA_SUBNETS = "extra_subnets"
+    /** 界面语言 (board item #2): "" = 跟随系统 (default — old prefs have
+     *  no such key, which reads back as "" and keeps the pre-i18n
+     *  behaviour), "zh" = 中文, "en" = English. Applied by AppLocale. */
+    const val KEY_LANGUAGE = "language"
+
+    fun language(ctx: Context): String =
+        prefs(ctx).getString(KEY_LANGUAGE, "") ?: ""
+
+    fun setLanguage(ctx: Context, lang: String) =
+        prefs(ctx).edit().putString(KEY_LANGUAGE, lang).apply()
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 

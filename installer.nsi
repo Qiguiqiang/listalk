@@ -17,7 +17,7 @@ SetCompressor /SOLID lzma
 !include "nsDialogs.nsh"
 
 !define PRODUCT_NAME "听说 LisTalk"
-!define PRODUCT_VERSION "2.3.0"
+!define PRODUCT_VERSION "2.3.2"
 !define PRODUCT_PUBLISHER "Gray"
 !ifndef SRC_DIR
     !define SRC_DIR "windows-native\stage-v22"
@@ -47,6 +47,10 @@ SetCompressor /SOLID lzma
 ; enumeration crashes. The bat itself is staged as oneclick-install.bat
 ; and restored to 一键安装.bat at install time via File /oname=.
 !insertmacro RequireDriverFile "${DRV_STAGE}\oneclick-install.bat"
+; devnode.exe: the bundled SetupAPI helper that creates the device node
+; in 一键安装.bat Step 4 (replaces the WDK-only devcon.exe; without it
+; the install stages the package but no device ever appears).
+!insertmacro RequireDriverFile "${DRV_STAGE}\devnode.exe"
 !insertmacro RequireDriverFile "${DRV_STAGE}\install-driver.ps1"
 !insertmacro RequireDriverFile "${DRV_STAGE}\elevate.ps1"
 !insertmacro RequireDriverFile "${DRV_STAGE}\uninstall-driver.ps1"
@@ -175,6 +179,7 @@ Section "听说虚拟音频设备驱动（测试签名）" SEC_DRIVER
     File "${DRV_STAGE}\SimpleAudioSample.inf"
     File "${DRV_STAGE}\simpleaudiosample.sys"
     File "${DRV_STAGE}\SimpleAudioSample.cat"
+    File "${DRV_STAGE}\devnode.exe"
     SetOutPath "$INSTDIR\driver\cert"
     File "${DRV_STAGE}\driver-test-cert.cer"
 
@@ -261,7 +266,7 @@ Function RebootPageCreate
     ${If} $0 == error
         Abort
     ${EndIf}
-    ${NSD_CreateLabel} 0 0 100% 42u "驱动组件的特权步骤已完成：测试证书已导入、Windows 测试模式已开启、续装项已写入。$\r$\n$\r$\n重启并重新登录后，驱动安装会自动继续（登录后请点掉一次 UAC 提示），完成后 Windows 声音设置里会出现「扬声器 / 麦克风（听说 LisTalk 虚拟音频设备）」。"
+    ${NSD_CreateLabel} 0 0 100% 42u "驱动组件的特权步骤已完成：测试证书已导入、Windows 测试模式已开启、续装项已写入。$\r$\n$\r$\n重启并重新登录后，驱动安装会自动继续（登录后请点掉一次 UAC 提示），完成后 Windows 声音设置里会出现「扬声器（AirBridge Wave Speaker）/ 麦克风（AirBridge Wave Microphone）」。"
     Pop $1
     ${NSD_CreateCheckbox} 0 48u 100% 12u "现在重启电脑（推荐）"
     Pop $RebootCheckbox
@@ -278,7 +283,7 @@ FunctionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
     !insertmacro MUI_DESCRIPTION_TEXT ${SEC_MAIN} "听说 LisTalk 主程序（必选）"
-    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DRIVER} "安装后，Windows 声音设置里会出现「扬声器 / 麦克风（听说 LisTalk 虚拟音频设备）」，电脑声音可直接选它送往手机。注意：本驱动为测试签名版，需要关闭 Secure Boot、开启 Windows 测试模式（桌面右下角有水印），并在安装后重启一次、自动完成剩余安装。仅建议在自己的电脑上安装。不勾选也不影响使用（App 会自动回退 VB-CABLE）。"
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DRIVER} "安装后，Windows 声音设置里会出现「扬声器（AirBridge Wave Speaker）/ 麦克风（AirBridge Wave Microphone）」（设备：声桥 AirBridge 虚拟音频设备），电脑声音可直接选它送往手机。注意：本驱动为测试签名版，需要关闭 Secure Boot、开启 Windows 测试模式（桌面右下角有水印），并在安装后重启一次、自动完成剩余安装。仅建议在自己的电脑上安装。不勾选也不影响使用（App 会自动回退 VB-CABLE）。"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "Uninstall"
